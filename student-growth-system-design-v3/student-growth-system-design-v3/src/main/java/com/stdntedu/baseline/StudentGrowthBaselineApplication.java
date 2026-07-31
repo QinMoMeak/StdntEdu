@@ -1,12 +1,12 @@
-package com.stdntedu.baseline;
+package com.stdntedu;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class StudentGrowthBaselineApplication {
+public class StudentGrowthApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(StudentGrowthBaselineApplication.class, args);
+        SpringApplication.run(StudentGrowthApplication.class, args);
     }
 }

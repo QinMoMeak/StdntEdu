@@ -1,74 +1,133 @@
 openapi: 3.1.0
-info: {title: Student Growth Archive API, version: 3.0.0}
+info: {title: Student Growth Archive API, version: 3.0.0, license: {name: MIT, identifier: MIT}}
 servers: [{url: /api/v1}]
+security: [{bearerAuth: []}]
 paths:
   /students:
-    get: {summary: 查询学生列表, responses: {'200': {$ref: '#/components/responses/StudentList'}}}
+    get: {operationId: listStudents, summary: 查询学生列表, responses: {'200': {$ref: '#/components/responses/StudentList'}, '401': {$ref: '#/components/responses/Unauthorized'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
     post:
+      operationId: createStudent
       summary: 新增学生
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudentCreate'}}}}
-      responses: {'201': {$ref: '#/components/responses/StudentOne'}, '422': {$ref: '#/components/responses/Error'}}
+      responses: {'201': {$ref: '#/components/responses/StudentOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
   /students/{studentId}:
     parameters: [{$ref: '#/components/parameters/StudentId'}]
-    get: {summary: 查询学生详情, responses: {'200': {$ref: '#/components/responses/StudentOne'}, '404': {$ref: '#/components/responses/Error'}}}
+    get: {operationId: getStudent, summary: 查询学生详情, responses: {'200': {$ref: '#/components/responses/StudentOne'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
     put:
+      operationId: updateStudent
       summary: 修改学生
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudentUpdate'}}}}
-      responses: {'200': {$ref: '#/components/responses/StudentOne'}, '409': {$ref: '#/components/responses/Error'}}
+      responses: {'200': {$ref: '#/components/responses/StudentOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
   /exams:
     post:
+      operationId: createExam
       summary: 新增考试及成绩
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ExamCreate'}}}}
-      responses: {'201': {$ref: '#/components/responses/ExamOne'}}
+      responses: {'201': {$ref: '#/components/responses/ExamOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
   /exams/{examId}:
     parameters: [{$ref: '#/components/parameters/ExamId'}]
-    get: {summary: 查询考试, responses: {'200': {$ref: '#/components/responses/ExamOne'}}}
+    get: {operationId: getExam, summary: 查询考试, responses: {'200': {$ref: '#/components/responses/ExamOne'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
     put:
+      operationId: updateExam
       summary: 修改考试
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ExamUpdate'}}}}
-      responses: {'200': {$ref: '#/components/responses/ExamOne'}}
-    delete: {summary: 删除考试, responses: {'204': {description: 删除成功}}}
+      responses: {'200': {$ref: '#/components/responses/ExamOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+    delete: {operationId: deleteExam, summary: 删除考试, responses: {'204': {description: 删除成功}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
   /wrong-questions:
     get:
+      operationId: listWrongQuestions
       summary: 分页查询错题
       parameters: [{$ref: '#/components/parameters/StudentIdQuery'}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}]
-      responses: {'200': {$ref: '#/components/responses/WrongPage'}}
+      responses: {'200': {$ref: '#/components/responses/WrongPage'}, '401': {$ref: '#/components/responses/Unauthorized'}, '500': {$ref: '#/components/responses/InternalServerError'}}
     post:
+      operationId: createWrongQuestion
       summary: 新增错题
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/WrongCreate'}}}}
-      responses: {'201': {$ref: '#/components/responses/WrongOne'}}
+      responses: {'201': {$ref: '#/components/responses/WrongOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
   /wrong-questions/{wrongQuestionId}:
     parameters: [{$ref: '#/components/parameters/WrongId'}]
-    get: {summary: 查询错题, responses: {'200': {$ref: '#/components/responses/WrongOne'}}}
+    get: {operationId: getWrongQuestion, summary: 查询错题, responses: {'200': {$ref: '#/components/responses/WrongOne'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
     put:
+      operationId: updateWrongQuestion
       summary: 修改错题
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/WrongUpdate'}}}}
-      responses: {'200': {$ref: '#/components/responses/WrongOne'}}
-    delete: {summary: 删除错题, responses: {'204': {description: 删除成功}}}
+      responses: {'200': {$ref: '#/components/responses/WrongOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+    delete: {operationId: deleteWrongQuestion, summary: 删除错题, responses: {'204': {description: 删除成功}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
   /wrong-questions/{wrongQuestionId}/reviews:
     parameters: [{$ref: '#/components/parameters/WrongId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
     post:
+      operationId: submitWrongQuestionReview
       summary: 提交复习结果
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ReviewCreate'}}}}
-      responses: {'201': {$ref: '#/components/responses/ReviewOne'}}
+      responses: {'201': {$ref: '#/components/responses/ReviewOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /reviews/due:
+    get:
+      operationId: listDueReviews
+      summary: 查询到期复习
+      parameters: [{name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}, {name: before, in: query, schema: {type: string, format: date-time}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}]
+      responses: {'200': {$ref: '#/components/responses/WrongPage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
   /resources:
     get:
+      operationId: listResources
       summary: 分页查询资源
       parameters: [{$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}]
-      responses: {'200': {$ref: '#/components/responses/ResourcePage'}}
+      responses: {'200': {$ref: '#/components/responses/ResourcePage'}, '401': {$ref: '#/components/responses/Unauthorized'}, '500': {$ref: '#/components/responses/InternalServerError'}}
     post:
+      operationId: createResource
       summary: 新增资源
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ResourceCreate'}}}}
-      responses: {'201': {$ref: '#/components/responses/ResourceOne'}}
+      responses: {'201': {$ref: '#/components/responses/ResourceOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
   /resources/{resourceId}:
     parameters: [{$ref: '#/components/parameters/ResourceId'}]
-    get: {summary: 查询资源, responses: {'200': {$ref: '#/components/responses/ResourceOne'}}}
+    get: {operationId: getResource, summary: 查询资源, responses: {'200': {$ref: '#/components/responses/ResourceOne'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
     put:
+      operationId: updateResource
       summary: 修改资源
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ResourceUpdate'}}}}
-      responses: {'200': {$ref: '#/components/responses/ResourceOne'}}
+      responses: {'200': {$ref: '#/components/responses/ResourceOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /resources/{resourceId}/history:
+    parameters: [{$ref: '#/components/parameters/ResourceId'}]
+    post:
+      operationId: createResourceHistory
+      summary: 新增资源学习历史
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ResourceHistoryCreateRequest'}}}}
+      responses: {'201': {$ref: '#/components/responses/ResourceHistoryOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+    get:
+      operationId: listResourceHistory
+      summary: 查询资源学习历史
+      parameters: [{name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}]
+      responses: {'200': {$ref: '#/components/responses/ResourceHistoryPage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /resource-history:
+    get:
+      operationId: listStudentResourceHistory
+      summary: 查询学生资源学习历史
+      parameters: [{name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}, {name: subjectId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: resourceType, in: query, schema: {type: string}}, {name: sourceType, in: query, schema: {type: string}}, {name: completed, in: query, schema: {type: boolean}}, {name: startDate, in: query, schema: {type: string, format: date}}, {name: endDate, in: query, schema: {type: string, format: date}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}]
+      responses: {'200': {$ref: '#/components/responses/ResourceHistoryPage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /study-logs:
+    get:
+      operationId: listStudyLogs
+      summary: 查询学习日志
+      parameters: [{name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}, {name: subjectId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: startDate, in: query, schema: {type: string, format: date}}, {name: endDate, in: query, schema: {type: string, format: date}}, {name: keyword, in: query, schema: {type: string}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}]
+      responses: {'200': {$ref: '#/components/responses/StudyLogPage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+    post:
+      operationId: createStudyLog
+      summary: 新增学习日志
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudyLogCreateRequest'}}}}
+      responses: {'201': {$ref: '#/components/responses/StudyLogOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /study-logs/{studyLogId}:
+    parameters: [{$ref: '#/components/parameters/StudyLogId'}]
+    get: {operationId: getStudyLog, summary: 查询学习日志, responses: {'200': {$ref: '#/components/responses/StudyLogOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    put:
+      operationId: updateStudyLog
+      summary: 修改学习日志
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudyLogUpdateRequest'}}}}
+      responses: {'200': {$ref: '#/components/responses/StudyLogOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+    delete: {operationId: deleteStudyLog, summary: 删除学习日志, responses: {'204': {description: 删除成功}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /dashboard:
+    get: {operationId: getDashboard, summary: 查询学生 Dashboard, parameters: [{name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}, {name: academicTermId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: date, in: query, schema: {type: string, format: date}}, {name: timezone, in: query, schema: {type: string}}], responses: {'200': {$ref: '#/components/responses/Dashboard'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
   /attachments:
     post:
+      operationId: uploadAttachment
       summary: 上传附件
       requestBody:
         required: true
@@ -80,15 +139,44 @@ paths:
               properties:
                 file: {type: string, format: binary}
                 category: {$ref: '#/components/schemas/AttachmentCategory'}
-      responses: {'201': {$ref: '#/components/responses/AttachmentOne'}, '413': {$ref: '#/components/responses/Error'}, '415': {$ref: '#/components/responses/Error'}}
+      responses: {'201': {$ref: '#/components/responses/AttachmentOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '413': {$ref: '#/components/responses/PayloadTooLarge'}, '415': {$ref: '#/components/responses/UnsupportedMediaType'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
   /attachments/{attachmentId}/content:
     parameters: [{$ref: '#/components/parameters/AttachmentId'}]
     get:
+      operationId: downloadAttachment
       summary: 下载附件
       responses:
         '200': {description: 文件, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /ai/models:
+    get: {operationId: listAiModels, summary: 查询 AI 模型, responses: {'200': {$ref: '#/components/responses/AiModelList'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    post:
+      operationId: createAiModel
+      summary: 新增 AI 模型
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AiModelCreateRequest'}}}}
+      responses: {'201': {$ref: '#/components/responses/AiModelOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /ai/models/{modelId}:
+    parameters: [{$ref: '#/components/parameters/ModelId'}]
+    get: {operationId: getAiModel, summary: 查询 AI 模型, responses: {'200': {$ref: '#/components/responses/AiModelOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    put:
+      operationId: updateAiModel
+      summary: 修改 AI 模型
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AiModelUpdateRequest'}}}}
+      responses: {'200': {$ref: '#/components/responses/AiModelOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /ai/models/{modelId}/test:
+    parameters: [{$ref: '#/components/parameters/ModelId'}]
+    post: {operationId: testAiModelConnection, summary: 测试 AI 模型连接, requestBody: {required: true, content: {application/json: {schema: {type: object}}}}, responses: {'200': {$ref: '#/components/responses/AiConnectionTest'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /ai/models/{modelId}/enable:
+    parameters: [{$ref: '#/components/parameters/ModelId'}]
+    post: {operationId: enableAiModel, summary: 启用 AI 模型, requestBody: {required: true, content: {application/json: {schema: {type: object}}}}, responses: {'200': {$ref: '#/components/responses/AiModelOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /ai/models/{modelId}/disable:
+    parameters: [{$ref: '#/components/parameters/ModelId'}]
+    post: {operationId: disableAiModel, summary: 停用 AI 模型, requestBody: {required: true, content: {application/json: {schema: {type: object}}}}, responses: {'200': {$ref: '#/components/responses/AiModelOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
   /ai/wrong-question-extractions:
     post:
+      operationId: createAiExtractionTask
       summary: 创建AI错题识别任务
       requestBody:
         required: true
@@ -98,22 +186,54 @@ paths:
               type: object
               required: [files, studentId, sourceType, modelId]
               properties:
-                files: {type: array, minItems: 1, maxItems: 20, items: {type: string, format: binary}}
+                files: {type: array, minItems: 1, maxItems: 20, description: 'JPEG、PNG、WEBP 单文件最大 15 MB；PDF 单文件最大 50 MB；单任务最多 20 个文件', items: {type: string, format: binary}}
                 studentId: {$ref: '#/components/schemas/Id'}
+                subjectId: {type: [string,'null']}
+                gradeId: {type: [string,'null']}
                 sourceType: {$ref: '#/components/schemas/WrongSource'}
+                sourceName: {type: [string,'null']}
+                examId: {type: [string,'null']}
                 modelId: {$ref: '#/components/schemas/Id'}
-      responses: {'202': {$ref: '#/components/responses/AiTaskOne'}}
+                recognizeAnalysis: {type: boolean, default: false}
+                matchKnowledge: {type: boolean, default: true}
+                maskPersonalInfo: {type: boolean, default: false}
+            encoding: {files: {contentType: 'image/jpeg, image/png, image/webp, application/pdf'}}
+      responses: {'202': {$ref: '#/components/responses/AiTaskOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '413': {$ref: '#/components/responses/PayloadTooLarge'}, '415': {$ref: '#/components/responses/UnsupportedMediaType'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
   /ai/wrong-question-extractions/{taskId}:
     parameters: [{$ref: '#/components/parameters/TaskId'}]
-    get: {summary: 查询AI任务, responses: {'200': {$ref: '#/components/responses/AiTaskOne'}}}
+    get: {operationId: getAiExtractionTask, summary: 查询AI任务, responses: {'200': {$ref: '#/components/responses/AiTaskOne'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /ai/wrong-question-extractions/{taskId}/questions:
+    parameters: [{$ref: '#/components/parameters/TaskId'}]
+    get: {operationId: listAiExtractionQuestions, summary: 查询识别临时题目, responses: {'200': {$ref: '#/components/responses/AiExtractionQuestionPage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /ai/wrong-question-extractions/{taskId}/questions/{questionId}:
+    parameters: [{$ref: '#/components/parameters/TaskId'}, {$ref: '#/components/parameters/QuestionId'}]
+    put:
+      operationId: updateAiExtractionQuestion
+      summary: 修改识别临时题目
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AiExtractionQuestionUpdateRequest'}}}}
+      responses: {'200': {$ref: '#/components/responses/AiExtractionQuestionOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
   /ai/wrong-question-extractions/{taskId}/confirm:
     parameters: [{$ref: '#/components/parameters/TaskId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
     post:
+      operationId: confirmAiExtractionTask
       summary: 确认识别结果
-      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AiConfirm'}}}}
-      responses: {'200': {$ref: '#/components/responses/AiConfirmOne'}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AiExtractionConfirmRequest'}}}}
+      responses: {'200': {$ref: '#/components/responses/AiConfirmOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /ai/wrong-question-extractions/{taskId}/retry:
+    parameters: [{$ref: '#/components/parameters/TaskId'}]
+    post: {operationId: retryAiWrongQuestionExtraction, summary: 重试 AI 错题识别, description: '仅允许 FAILED 或 EXPIRED 状态重试。', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RetryAiExtractionRequest'}}}}, responses: {'202': {$ref: '#/components/responses/AiTaskOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /ai/wrong-question-extractions/{taskId}/cancel:
+    parameters: [{$ref: '#/components/parameters/TaskId'}]
+    post: {operationId: cancelAiWrongQuestionExtraction, summary: 取消 AI 错题识别, description: '仅允许 PENDING、RUNNING 或 REVIEW_REQUIRED 状态取消。', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CancelAiExtractionRequest'}}}}, responses: {'200': {$ref: '#/components/responses/AiTaskOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /ai/analyses:
+    get: {operationId: listAiAnalyses, summary: 查询 AI 分析历史, parameters: [{name: studentId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: businessType, in: query, schema: {type: string}}, {name: businessId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: modelId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: status, in: query, schema: {type: string}}, {name: startTime, in: query, schema: {type: string, format: date-time}}, {name: endTime, in: query, schema: {type: string, format: date-time}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}], responses: {'200': {$ref: '#/components/responses/AiAnalysisPage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /ai/analyses/{analysisId}:
+    parameters: [{$ref: '#/components/parameters/AnalysisId'}]
+    get: {operationId: getAiAnalysis, summary: 查询 AI 分析详情, responses: {'200': {$ref: '#/components/responses/AiAnalysisOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
   /imports:
+    get: {operationId: listImportTasks, summary: 查询导入任务, parameters: [{name: importType, in: query, schema: {$ref: '#/components/schemas/ImportType'}}, {name: status, in: query, schema: {$ref: '#/components/schemas/ImportTaskStatus'}}, {name: studentId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: startTime, in: query, schema: {type: string, format: date-time}}, {name: endTime, in: query, schema: {type: string, format: date-time}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}], responses: {'200': {$ref: '#/components/responses/ImportPage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
     post:
+      operationId: createImportTask
       summary: 创建导入任务
       requestBody:
         required: true
@@ -123,40 +243,202 @@ paths:
               type: object
               required: [file, importType]
               properties:
-                file: {type: string, format: binary}
+                file: {type: string, format: binary, description: 'CSV、XLSX、JSON 最大 50 MB；ZIP 最大 500 MB'}
                 importType: {$ref: '#/components/schemas/ImportType'}
-                studentId: {$ref: '#/components/schemas/Id'}
-      responses: {'202': {$ref: '#/components/responses/ImportOne'}}
+                studentId: {type: [string,'null']}
+                dryRun: {type: boolean, default: true}
+                encoding: {type: string, default: UTF-8}
+                sheetName: {type: [string,'null']}
+                hasHeader: {type: boolean, default: true}
+            encoding: {file: {contentType: 'text/csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json, application/zip'}}
+      responses: {'202': {$ref: '#/components/responses/ImportOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '413': {$ref: '#/components/responses/PayloadTooLarge'}, '415': {$ref: '#/components/responses/UnsupportedMediaType'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
   /imports/{taskId}:
     parameters: [{$ref: '#/components/parameters/TaskId'}]
-    get: {summary: 查询导入任务, responses: {'200': {$ref: '#/components/responses/ImportOne'}}}
+    get: {operationId: getImportTask, summary: 查询导入任务, responses: {'200': {$ref: '#/components/responses/ImportOne'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
   /imports/{taskId}/confirm:
     parameters: [{$ref: '#/components/parameters/TaskId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
-    post: {summary: 确认导入, responses: {'200': {$ref: '#/components/responses/ImportOne'}}}
-  /exports:
     post:
+      operationId: confirmImportTask
+      summary: 确认导入
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ImportConfirmRequest'}}}}
+      responses: {'200': {$ref: '#/components/responses/ImportOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /imports/{taskId}/cancel:
+    parameters: [{$ref: '#/components/parameters/TaskId'}]
+    post: {operationId: cancelImportTask, summary: 取消导入任务, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CancelImportRequest'}}}}, responses: {'200': {$ref: '#/components/responses/ImportOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /imports/{taskId}/errors:
+    parameters: [{$ref: '#/components/parameters/TaskId'}]
+    get: {operationId: downloadImportErrorReport, summary: 下载导入错误报告, parameters: [{name: format, in: query, schema: {type: string, enum: [CSV,XLSX], default: CSV}}], responses: {'200': {$ref: '#/components/responses/ImportErrorExport'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /imports/{taskId}/retry:
+    parameters: [{$ref: '#/components/parameters/TaskId'}]
+    post: {operationId: retryImportTask, summary: 重试导入任务, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RetryImportRequest'}}}}, responses: {'202': {$ref: '#/components/responses/ImportOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /exports:
+    get: {operationId: listExportTasks, summary: 查询导出任务, parameters: [{name: studentId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: status, in: query, schema: {$ref: '#/components/schemas/AsyncTaskStatus'}}, {name: format, in: query, schema: {$ref: '#/components/schemas/ExportFormat'}}, {name: startTime, in: query, schema: {type: string, format: date-time}}, {name: endTime, in: query, schema: {type: string, format: date-time}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}], responses: {'200': {$ref: '#/components/responses/ExportPage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    post:
+      operationId: createExportTask
       summary: 创建导出任务
-      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ExportCreate'}}}}
-      responses: {'202': {$ref: '#/components/responses/ExportOne'}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ExportCreateRequest'}}}}
+      responses: {'202': {$ref: '#/components/responses/ExportOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
   /exports/{taskId}:
     parameters: [{$ref: '#/components/parameters/TaskId'}]
-    get: {summary: 查询导出任务, responses: {'200': {$ref: '#/components/responses/ExportOne'}}}
+    get: {operationId: getExportTask, summary: 查询导出任务, responses: {'200': {$ref: '#/components/responses/ExportOne'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /exports/{taskId}/cancel:
+    parameters: [{$ref: '#/components/parameters/TaskId'}]
+    post: {operationId: cancelExportTask, summary: 取消导出任务, requestBody: {required: true, content: {application/json: {schema: {type: object}}}}, responses: {'200': {$ref: '#/components/responses/ExportOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /exports/{taskId}/download:
+    parameters: [{$ref: '#/components/parameters/TaskId'}]
+    get: {operationId: downloadExportFile, summary: 下载导出文件, responses: {'200': {$ref: '#/components/responses/ExportDownload'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
   /backups:
-    get: {summary: 查询备份, responses: {'200': {$ref: '#/components/responses/BackupList'}}}
+    get: {operationId: listBackups, summary: 查询备份, parameters: [{name: backupType, in: query, schema: {$ref: '#/components/schemas/BackupType'}}, {name: status, in: query, schema: {$ref: '#/components/schemas/BackupStatus'}}, {name: startTime, in: query, schema: {type: string, format: date-time}}, {name: endTime, in: query, schema: {type: string, format: date-time}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}], responses: {'200': {$ref: '#/components/responses/BackupList'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
     post:
+      operationId: createBackup
       summary: 创建备份
-      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/BackupCreate'}}}}
-      responses: {'202': {$ref: '#/components/responses/BackupOne'}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/BackupCreateRequest'}}}}
+      responses: {'202': {$ref: '#/components/responses/BackupOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /backups/{backupId}:
+    parameters: [{$ref: '#/components/parameters/BackupId'}]
+    get: {operationId: getBackup, summary: 查询备份详情, responses: {'200': {$ref: '#/components/responses/BackupOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    delete: {operationId: deleteBackup, summary: 删除备份, responses: {'204': {description: 删除成功}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /backups/{backupId}/download:
+    parameters: [{$ref: '#/components/parameters/BackupId'}]
+    get: {operationId: downloadBackup, summary: 下载备份, responses: {'200': {$ref: '#/components/responses/BackupDownload'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /backups/{backupId}/verify:
+    parameters: [{$ref: '#/components/parameters/BackupId'}]
+    post: {operationId: verifyBackup, summary: 校验备份, requestBody: {required: true, content: {application/json: {schema: {type: object}}}}, responses: {'200': {$ref: '#/components/responses/BackupVerify'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
   /backups/{backupId}/restore:
     parameters: [{$ref: '#/components/parameters/BackupId'}]
     post:
+      operationId: createRestoreTask
       summary: 创建恢复任务
-      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RestoreCreate'}}}}
-      responses: {'202': {$ref: '#/components/responses/RestoreOne'}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RestoreCreateRequest'}}}}
+      responses: {'202': {$ref: '#/components/responses/RestoreOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
   /restores/{taskId}:
     parameters: [{$ref: '#/components/parameters/TaskId'}]
-    get: {summary: 查询恢复任务, responses: {'200': {$ref: '#/components/responses/RestoreOne'}}}
+    get: {operationId: getRestoreTask, summary: 查询恢复任务, responses: {'200': {$ref: '#/components/responses/RestoreOne'}, '401': {$ref: '#/components/responses/Unauthorized'}, '404': {$ref: '#/components/responses/NotFound'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /restores:
+    get: {operationId: listRestoreTasks, summary: 查询恢复任务, parameters: [{name: backupId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: status, in: query, schema: {$ref: '#/components/schemas/RestoreStatus'}}, {name: startTime, in: query, schema: {type: string, format: date-time}}, {name: endTime, in: query, schema: {type: string, format: date-time}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}], responses: {'200': {$ref: '#/components/responses/RestorePage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /restores/{taskId}/cancel:
+    parameters: [{$ref: '#/components/parameters/TaskId'}]
+    post: {operationId: cancelRestoreTask, summary: 取消恢复任务, description: '仅允许 PENDING、CREATING_SNAPSHOT 或 VALIDATING 状态取消。', requestBody: {required: true, content: {application/json: {schema: {type: object}}}}, responses: {'200': {$ref: '#/components/responses/RestoreOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /stages:
+    get: {operationId: listStages, summary: 查询学段, parameters: [{name: stageId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: enabledOnly, in: query, schema: {type: boolean, default: true}}], responses: {'200': {$ref: '#/components/responses/StageList'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /grades:
+    get: {operationId: listGrades, summary: 查询年级, parameters: [{name: stageId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: enabledOnly, in: query, schema: {type: boolean, default: true}}], responses: {'200': {$ref: '#/components/responses/GradeList'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /subjects:
+    get: {operationId: listSubjects, summary: 查询学科, parameters: [{name: enabledOnly, in: query, schema: {type: boolean, default: true}}], responses: {'200': {$ref: '#/components/responses/SubjectList'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /dictionaries/{dictType}:
+    parameters: [{name: dictType, in: path, required: true, schema: {type: string}}]
+    get: {operationId: listDictionaryItems, summary: 查询字典项, parameters: [{name: enabledOnly, in: query, schema: {type: boolean, default: true}}], responses: {'200': {$ref: '#/components/responses/DictionaryItemList'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /academic-terms:
+    get: {operationId: listAcademicTerms, summary: 查询学年学期, parameters: [{name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}, {name: currentOnly, in: query, schema: {type: boolean, default: false}}], responses: {'200': {$ref: '#/components/responses/AcademicTermList'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    post:
+      operationId: createAcademicTerm
+      summary: 新增学年学期
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AcademicTermCreateRequest'}}}}
+      responses: {'201': {$ref: '#/components/responses/AcademicTermOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /academic-terms/{termId}:
+    parameters: [{$ref: '#/components/parameters/TermId'}]
+    put:
+      operationId: updateAcademicTerm
+      summary: 修改学年学期
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AcademicTermUpdateRequest'}}}}
+      responses: {'200': {$ref: '#/components/responses/AcademicTermOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /scores:
+    get: {operationId: listScores, summary: 查询成绩, parameters: [{name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}, {name: academicTermId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: subjectId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: examType, in: query, schema: {$ref: '#/components/schemas/ExamType'}}, {name: startDate, in: query, schema: {type: string, format: date}}, {name: endDate, in: query, schema: {type: string, format: date}}, {name: keyword, in: query, schema: {type: string}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}], responses: {'200': {$ref: '#/components/responses/ScorePage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /scores/trends:
+    get: {operationId: getScoreTrends, summary: 查询成绩趋势, parameters: [{name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}, {name: subjectId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: academicTermId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: startDate, in: query, schema: {type: string, format: date}}, {name: endDate, in: query, schema: {type: string, format: date}}], responses: {'200': {$ref: '#/components/responses/ScoreTrend'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /knowledge/tree:
+    get: {operationId: getKnowledgeTree, summary: 查询知识树, parameters: [{name: stageId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: gradeId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: subjectId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: enabledOnly, in: query, schema: {type: boolean, default: true}}], responses: {'200': {$ref: '#/components/responses/KnowledgeTree'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /knowledge/nodes:
+    post:
+      operationId: createKnowledgeNode
+      summary: 新增知识节点
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/KnowledgeNodeCreateRequest'}}}}
+      responses: {'201': {$ref: '#/components/responses/KnowledgeNodeOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /knowledge/nodes/{knowledgeId}:
+    parameters: [{$ref: '#/components/parameters/KnowledgeId'}]
+    put:
+      operationId: updateKnowledgeNode
+      summary: 修改知识节点
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/KnowledgeNodeUpdateRequest'}}}}
+      responses: {'200': {$ref: '#/components/responses/KnowledgeNodeOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+  /knowledge/nodes/{knowledgeId}/move:
+    parameters: [{$ref: '#/components/parameters/KnowledgeId'}]
+    post: {operationId: moveKnowledgeNode, summary: 移动知识节点, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/KnowledgeNodeMoveRequest'}}}}, responses: {'200': {$ref: '#/components/responses/KnowledgeNodeOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /knowledge/nodes/{knowledgeId}/disable:
+    parameters: [{$ref: '#/components/parameters/KnowledgeId'}]
+    post: {operationId: disableKnowledgeNode, summary: 停用知识节点, requestBody: {required: true, content: {application/json: {schema: {type: object}}}}, responses: {'200': {$ref: '#/components/responses/KnowledgeNodeOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /knowledge/mastery:
+    get: {operationId: listKnowledgeMastery, summary: 查询知识掌握度, parameters: [{name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}, {name: subjectId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: gradeId, in: query, schema: {$ref: '#/components/schemas/Id'}}, {name: minScore, in: query, schema: {type: number, minimum: 0, maximum: 100}}, {name: maxScore, in: query, schema: {type: number, minimum: 0, maximum: 100}}], responses: {'200': {$ref: '#/components/responses/MasteryList'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /knowledge/mastery/{knowledgeId}/history:
+    parameters: [{$ref: '#/components/parameters/KnowledgeId'}]
+    get: {operationId: listMasteryHistory, summary: 查询掌握度历史, parameters: [{name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}], responses: {'200': {$ref: '#/components/responses/MasteryHistoryList'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /knowledge/mastery/{knowledgeId}/adjust:
+    parameters: [{$ref: '#/components/parameters/KnowledgeId'}]
+    post: {operationId: adjustKnowledgeMastery, summary: 调整知识掌握度, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MasteryAdjustRequest'}}}}, responses: {'200': {$ref: '#/components/responses/MasteryOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /knowledge/mastery/{knowledgeId}/unlock:
+    parameters: [{$ref: '#/components/parameters/KnowledgeId'}]
+    post: {operationId: unlockKnowledgeMastery, summary: 解锁知识掌握度, requestBody: {required: true, content: {application/json: {schema: {type: object}}}}, responses: {'200': {$ref: '#/components/responses/MasteryOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /study-plans:
+    get: {operationId: listStudyPlans, summary: 查询学习计划, parameters: [{name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}, {name: status, in: query, schema: {$ref: '#/components/schemas/StudyPlanStatus'}}, {name: planType, in: query, schema: {type: string}}, {name: startDate, in: query, schema: {type: string, format: date}}, {name: endDate, in: query, schema: {type: string, format: date}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}], responses: {'200': {$ref: '#/components/responses/StudyPlanPage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    post: {operationId: createStudyPlan, summary: 新增学习计划, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudyPlanCreateRequest'}}}}, responses: {'201': {$ref: '#/components/responses/StudyPlanOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /study-plans/generate:
+    post: {operationId: generateStudyPlan, summary: 生成学习计划, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudyPlanGenerateRequest'}}}}, responses: {'202': {$ref: '#/components/responses/StudyPlanOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /study-plans/{planId}:
+    parameters: [{$ref: '#/components/parameters/PlanId'}]
+    get: {operationId: getStudyPlan, summary: 查询学习计划详情, responses: {'200': {$ref: '#/components/responses/StudyPlanOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    put: {operationId: updateStudyPlan, summary: 修改学习计划, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudyPlanUpdateRequest'}}}}, responses: {'200': {$ref: '#/components/responses/StudyPlanOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    delete: {operationId: deleteStudyPlan, summary: 删除学习计划, responses: {'204': {description: 删除成功}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /study-plans/{planId}/activate:
+    parameters: [{$ref: '#/components/parameters/PlanId'}]
+    post: {operationId: activateStudyPlan, summary: 激活学习计划, description: 状态冲突时返回 409。, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudyPlanStatusChangeRequest'}}}}, responses: {'200': {$ref: '#/components/responses/StudyPlanOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /study-plans/{planId}/pause:
+    parameters: [{$ref: '#/components/parameters/PlanId'}]
+    post: {operationId: pauseStudyPlan, summary: 暂停学习计划, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudyPlanStatusChangeRequest'}}}}, responses: {'200': {$ref: '#/components/responses/StudyPlanOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /study-plans/{planId}/complete:
+    parameters: [{$ref: '#/components/parameters/PlanId'}]
+    post: {operationId: completeStudyPlan, summary: 完成学习计划, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudyPlanStatusChangeRequest'}}}}, responses: {'200': {$ref: '#/components/responses/StudyPlanOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /study-plans/{planId}/cancel:
+    parameters: [{$ref: '#/components/parameters/PlanId'}]
+    post: {operationId: cancelStudyPlan, summary: 取消学习计划, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudyPlanStatusChangeRequest'}}}}, responses: {'200': {$ref: '#/components/responses/StudyPlanOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /study-plans/{planId}/tasks:
+    parameters: [{$ref: '#/components/parameters/PlanId'}]
+    get: {operationId: listStudyPlanTasks, summary: 查询计划任务, parameters: [{name: taskDate, in: query, schema: {type: string, format: date}}, {name: status, in: query, schema: {$ref: '#/components/schemas/StudyPlanTaskStatus'}}, {name: taskType, in: query, schema: {$ref: '#/components/schemas/StudyPlanTaskType'}}], responses: {'200': {$ref: '#/components/responses/StudyPlanTaskPage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    post: {operationId: createStudyPlanTask, summary: 新增计划任务, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudyPlanTaskCreateRequest'}}}}, responses: {'201': {$ref: '#/components/responses/StudyPlanTaskOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /study-plans/{planId}/tasks/{taskId}:
+    parameters: [{$ref: '#/components/parameters/PlanId'}, {$ref: '#/components/parameters/TaskId'}]
+    put: {operationId: updateStudyPlanTask, summary: 修改计划任务, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudyPlanTaskUpdateRequest'}}}}, responses: {'200': {$ref: '#/components/responses/StudyPlanTaskOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /study-plans/{planId}/tasks/{taskId}/complete:
+    parameters: [{$ref: '#/components/parameters/PlanId'}, {$ref: '#/components/parameters/TaskId'}]
+    post: {operationId: completeStudyPlanTask, summary: 完成计划任务, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CompleteStudyPlanTaskRequest'}}}}, responses: {'200': {$ref: '#/components/responses/StudyPlanTaskOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /study-plans/{planId}/tasks/{taskId}/skip:
+    parameters: [{$ref: '#/components/parameters/PlanId'}, {$ref: '#/components/parameters/TaskId'}]
+    post: {operationId: skipStudyPlanTask, summary: 跳过计划任务, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SkipStudyPlanTaskRequest'}}}}, responses: {'200': {$ref: '#/components/responses/StudyPlanTaskOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /growth-events:
+    get: {operationId: listGrowthEvents, summary: 查询成长事件, parameters: [{name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}, {name: eventType, in: query, schema: {type: string}}, {name: startDate, in: query, schema: {type: string, format: date}}, {name: endDate, in: query, schema: {type: string, format: date}}, {name: keyword, in: query, schema: {type: string}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}], responses: {'200': {$ref: '#/components/responses/GrowthEventPage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    post: {operationId: createGrowthEvent, summary: 新增成长事件, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/GrowthEventCreateRequest'}}}}, responses: {'201': {$ref: '#/components/responses/GrowthEventOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /growth-events/{eventId}:
+    parameters: [{$ref: '#/components/parameters/EventId'}]
+    get: {operationId: getGrowthEvent, summary: 查询成长事件详情, responses: {'200': {$ref: '#/components/responses/GrowthEventOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    put: {operationId: updateGrowthEvent, summary: 修改成长事件, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/GrowthEventUpdateRequest'}}}}, responses: {'200': {$ref: '#/components/responses/GrowthEventOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    delete: {operationId: deleteGrowthEvent, summary: 删除成长事件, responses: {'204': {description: 删除成功}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /reports:
+    get: {operationId: listGrowthReports, summary: 查询成长报告, parameters: [{name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}, {name: reportType, in: query, schema: {$ref: '#/components/schemas/ReportType'}}, {name: status, in: query, schema: {$ref: '#/components/schemas/GrowthReportStatus'}}, {name: startDate, in: query, schema: {type: string, format: date}}, {name: endDate, in: query, schema: {type: string, format: date}}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}], responses: {'200': {$ref: '#/components/responses/GrowthReportPage'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+    post: {operationId: createGrowthReport, summary: 新增成长报告, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/GrowthReportCreateRequest'}}}}, responses: {'202': {$ref: '#/components/responses/GrowthReportOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /reports/{reportId}:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    get: {operationId: getGrowthReport, summary: 查询成长报告详情, responses: {'200': {$ref: '#/components/responses/GrowthReportOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /reports/{reportId}/regenerate:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {operationId: regenerateGrowthReport, summary: 重新生成成长报告, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/GrowthReportRegenerateRequest'}}}}, responses: {'202': {$ref: '#/components/responses/GrowthReportOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /reports/{reportId}/cancel:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    post: {operationId: cancelGrowthReport, summary: 取消成长报告生成, requestBody: {required: true, content: {application/json: {schema: {type: object}}}}, responses: {'200': {$ref: '#/components/responses/GrowthReportOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
+  /reports/{reportId}/export:
+    parameters: [{$ref: '#/components/parameters/ReportId'}]
+    get: {operationId: exportGrowthReport, summary: 导出成长报告, parameters: [{name: format, in: query, required: true, schema: {type: string, enum: [MARKDOWN,PDF,JSON]}}, {name: includeAttachments, in: query, schema: {type: boolean, default: false}}], responses: {'200': {$ref: '#/components/responses/GrowthReportExport'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}}
 components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
   parameters:
     StudentId: {name: studentId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
     ExamId: {name: examId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
@@ -169,11 +451,39 @@ components:
     Page: {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
     PageSize: {name: pageSize, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
     IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 8, maxLength: 64}}
+    TermId: {name: termId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    KnowledgeId: {name: knowledgeId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    StudyLogId: {name: studyLogId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    ModelId: {name: modelId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    QuestionId: {name: questionId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    AnalysisId: {name: analysisId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    PlanId: {name: planId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    EventId: {name: eventId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    ReportId: {name: reportId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
   schemas:
     Id: {type: string, pattern: '^[0-9]+$', example: '1'}
     Envelope: {type: object, required: [code,message,requestId,timestamp], properties: {code: {type: string}, message: {type: string}, requestId: {type: string}, timestamp: {type: string, format: date-time}}}
     Error: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: object, additionalProperties: true}}}]}
     Page: {type: object, required: [page,pageSize,total,totalPages], properties: {page: {type: integer}, pageSize: {type: integer}, total: {type: integer, format: int64}, totalPages: {type: integer}}}
+    StageDto: {type: object, required: [id,code,name,enabled], properties: {id: {$ref: '#/components/schemas/Id'}, code: {type: string}, name: {type: string}, enabled: {type: boolean}}}
+    GradeDto: {type: object, required: [id,stageId,code,name,enabled], properties: {id: {$ref: '#/components/schemas/Id'}, stageId: {$ref: '#/components/schemas/Id'}, code: {type: string}, name: {type: string}, enabled: {type: boolean}}}
+    SubjectDto: {type: object, required: [id,code,name,enabled], properties: {id: {$ref: '#/components/schemas/Id'}, code: {type: string}, name: {type: string}, enabled: {type: boolean}}}
+    DictionaryItemDto: {type: object, required: [id,dictType,code,name,enabled], properties: {id: {$ref: '#/components/schemas/Id'}, dictType: {type: string}, code: {type: string}, name: {type: string}, sortOrder: {type: integer}, enabled: {type: boolean}}}
+    SemesterType: {type: string, enum: [FIRST,SECOND,ALL_YEAR]}
+    AcademicTermCreateRequest: {type: object, required: [studentId,academicYear,semester,stageId,gradeId], properties: {studentId: {$ref: '#/components/schemas/Id'}, academicYear: {type: string, pattern: '^[0-9]{4}-[0-9]{4}$', example: '2026-2027'}, semester: {$ref: '#/components/schemas/SemesterType'}, stageId: {$ref: '#/components/schemas/Id'}, gradeId: {$ref: '#/components/schemas/Id'}, startDate: {type: [string,'null'], format: date}, endDate: {type: [string,'null'], format: date}, current: {type: boolean, default: false}}}
+    AcademicTermUpdateRequest: {allOf: [{$ref: '#/components/schemas/AcademicTermCreateRequest'}, {type: object, required: [version], properties: {version: {type: integer, minimum: 0}}}]}
+    AcademicTermDto: {allOf: [{$ref: '#/components/schemas/AcademicTermCreateRequest'}, {type: object, required: [id,version,createdAt,updatedAt], properties: {id: {$ref: '#/components/schemas/Id'}, version: {type: integer}, createdAt: {type: string, format: date-time}, updatedAt: {type: string, format: date-time}}}]}
+    ScoreListItemDto: {type: object, required: [id,examId,examName,examType,examDate,subjectId,subjectName,score,fullScore,scoreRate], properties: {id: {$ref: '#/components/schemas/Id'}, examId: {$ref: '#/components/schemas/Id'}, examName: {type: string}, examType: {$ref: '#/components/schemas/ExamType'}, examDate: {type: string, format: date}, academicTermId: {type: [string,'null']}, subjectId: {$ref: '#/components/schemas/Id'}, subjectName: {type: string}, score: {type: number}, fullScore: {type: number}, scoreRate: {type: number, minimum: 0, maximum: 1}, classRank: {type: [integer,'null']}, gradeRank: {type: [integer,'null']}}}
+    ScoreTrendPointDto: {type: object, required: [examId,examName,examDate,score,fullScore,scoreRate], properties: {examId: {$ref: '#/components/schemas/Id'}, examName: {type: string}, examDate: {type: string, format: date}, score: {type: number}, fullScore: {type: number}, scoreRate: {type: number, minimum: 0, maximum: 1}, classRank: {type: [integer,'null']}, gradeRank: {type: [integer,'null']}}}
+    ScorePageResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/ScoreListItemDto'}}}}]}}}]}
+    ScoreTrendResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/ScoreTrendPointDto'}}}}]}
+    KnowledgeNodeCreateRequest: {type: object, required: [name,subjectId], properties: {parentId: {type: [string,'null']}, stageId: {$ref: '#/components/schemas/Id'}, gradeId: {$ref: '#/components/schemas/Id'}, subjectId: {$ref: '#/components/schemas/Id'}, name: {type: string}, description: {type: [string,'null']}, sortOrder: {type: integer, default: 0}}}
+    KnowledgeNodeUpdateRequest: {allOf: [{$ref: '#/components/schemas/KnowledgeNodeCreateRequest'}, {type: object, required: [version], properties: {version: {type: integer}}}]}
+    KnowledgeNodeMoveRequest: {type: object, required: [version], properties: {parentId: {type: [string,'null']}, sortOrder: {type: integer, minimum: 0}, version: {type: integer}}}
+    KnowledgeTreeNodeDto: {type: object, required: [id,name,enabled,children], properties: {id: {$ref: '#/components/schemas/Id'}, parentId: {type: [string,'null']}, stageId: {type: [string,'null']}, gradeId: {type: [string,'null']}, subjectId: {$ref: '#/components/schemas/Id'}, name: {type: string}, description: {type: [string,'null']}, enabled: {type: boolean}, sortOrder: {type: integer}, children: {type: array, items: {$ref: '#/components/schemas/KnowledgeTreeNodeDto'}}}}
+    MasteryDto: {type: object, required: [id,studentId,knowledgeId,score], properties: {id: {$ref: '#/components/schemas/Id'}, studentId: {$ref: '#/components/schemas/Id'}, knowledgeId: {$ref: '#/components/schemas/Id'}, score: {type: number, minimum: 0, maximum: 100}, locked: {type: boolean}, version: {type: integer}, updatedAt: {type: string, format: date-time}}}
+    MasteryHistoryDto: {type: object, required: [id,studentId,knowledgeId,score,createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, studentId: {$ref: '#/components/schemas/Id'}, knowledgeId: {$ref: '#/components/schemas/Id'}, score: {type: number, minimum: 0, maximum: 100}, source: {type: string}, reason: {type: [string,'null']}, createdAt: {type: string, format: date-time}}}
+    MasteryAdjustRequest: {type: object, required: [studentId,targetScore,lockResult,reason,version], properties: {studentId: {$ref: '#/components/schemas/Id'}, targetScore: {type: number, minimum: 0, maximum: 100}, lockResult: {type: boolean}, reason: {type: string, minLength: 1}, version: {type: integer}}}
     StudentCreate: {type: object, required: [name,currentStageId,currentGradeId], properties: {name: {type: string}, birthday: {type: [string,'null'], format: date}, school: {type: [string,'null']}, currentStageId: {$ref: '#/components/schemas/Id'}, currentGradeId: {$ref: '#/components/schemas/Id'}, remark: {type: [string,'null']}}}
     StudentUpdate: {allOf: [{$ref: '#/components/schemas/StudentCreate'}, {type: object, required: [version], properties: {version: {type: integer}}}]}
     Student: {allOf: [{$ref: '#/components/schemas/StudentCreate'}, {type: object, required: [id,studentCode,version], properties: {id: {$ref: '#/components/schemas/Id'}, studentCode: {type: string}, version: {type: integer}}}]}
@@ -187,21 +497,91 @@ components:
     Wrong: {allOf: [{$ref: '#/components/schemas/WrongCreate'}, {type: object, required: [id,status,version], properties: {id: {$ref: '#/components/schemas/Id'}, status: {$ref: '#/components/schemas/WrongStatus'}, version: {type: integer}}}]}
     ReviewCreate: {type: object, required: [reviewTime,result], properties: {reviewTime: {type: string, format: date-time}, result: {$ref: '#/components/schemas/ReviewResult'}, durationSeconds: {type: [integer,'null']}, studentAnswer: {type: [string,'null']}, remark: {type: [string,'null']}}}
     ReviewOutcome: {type: object, properties: {reviewId: {$ref: '#/components/schemas/Id'}, wrongQuestionStatus: {$ref: '#/components/schemas/WrongStatus'}, masteryScore: {type: number}, nextReviewTime: {type: [string,'null'], format: date-time}}}
-    ResourceCreate: {type: object, required: [title,resourceType,sourceType,status], properties: {title: {type: string}, resourceType: {type: string}, sourceType: {type: string}, sourceUrl: {type: [string,'null']}, status: {$ref: '#/components/schemas/ResourceStatus'}, knowledgeIds: {type: array, items: {$ref: '#/components/schemas/Id'}}}}
+    ResourceCreate: {type: object, required: [title,resourceType,sourceType,status], properties: {title: {type: string}, resourceType: {type: string}, sourceType: {type: string}, sourceUrl: {type: [string,'null']}, subjectId: {type: [string,'null']}, durationSeconds: {type: [integer,'null'], minimum: 0}, difficulty: {type: [number,'null'], minimum: 0, maximum: 5}, status: {$ref: '#/components/schemas/ResourceStatus'}, description: {type: [string,'null']}, tags: {type: array, items: {type: string}}, knowledgeIds: {type: array, items: {$ref: '#/components/schemas/Id'}}, coverAttachmentId: {type: [string,'null']}}}
     ResourceUpdate: {allOf: [{$ref: '#/components/schemas/ResourceCreate'}, {type: object, required: [version], properties: {version: {type: integer}}}]}
     Resource: {allOf: [{$ref: '#/components/schemas/ResourceCreate'}, {type: object, required: [id,resourceCode,version], properties: {id: {$ref: '#/components/schemas/Id'}, resourceCode: {type: string}, version: {type: integer}}}]}
+    ResourceCreateRequest: {$ref: '#/components/schemas/ResourceCreate'}
+    ResourceUpdateRequest: {$ref: '#/components/schemas/ResourceUpdate'}
+    ResourceHistoryCreateRequest: {type: object, required: [studentId,durationSeconds,progressPercent,completed], properties: {studentId: {$ref: '#/components/schemas/Id'}, startTime: {type: [string,'null'], format: date-time}, endTime: {type: [string,'null'], format: date-time}, durationSeconds: {type: integer, minimum: 0}, progressPercent: {type: number, minimum: 0, maximum: 100}, completed: {type: boolean}, note: {type: [string,'null']}}}
+    ResourceHistoryDto: {type: object, required: [id,studentId,resourceId,resourceTitle,resourceType,sourceType,durationSeconds,progressPercent,completed,createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, studentId: {$ref: '#/components/schemas/Id'}, resourceId: {$ref: '#/components/schemas/Id'}, resourceTitle: {type: string}, resourceType: {type: string}, sourceType: {type: string}, startTime: {type: [string,'null'], format: date-time}, endTime: {type: [string,'null'], format: date-time}, durationSeconds: {type: integer, minimum: 0}, progressPercent: {type: number, minimum: 0, maximum: 100}, completed: {type: boolean}, note: {type: [string,'null']}, createdAt: {type: string, format: date-time}}}
+    StudyLogCreateRequest: {type: object, required: [studentId,studyDate,durationSeconds], properties: {studentId: {$ref: '#/components/schemas/Id'}, subjectId: {type: [string,'null']}, studyDate: {type: string, format: date}, durationSeconds: {type: integer, minimum: 0}, content: {type: [string,'null']}, remark: {type: [string,'null']}}}
+    StudyLogUpdateRequest: {allOf: [{$ref: '#/components/schemas/StudyLogCreateRequest'}, {type: object, required: [version], properties: {version: {type: integer}}}]}
+    StudyLogDto: {allOf: [{$ref: '#/components/schemas/StudyLogCreateRequest'}, {type: object, required: [id,version,createdAt,updatedAt], properties: {id: {$ref: '#/components/schemas/Id'}, subjectName: {type: [string,'null']}, version: {type: integer}, createdAt: {type: string, format: date-time}, updatedAt: {type: string, format: date-time}}}]}
+    ExamSummaryDto: {type: object, required: [id,examName,examType,examDate], properties: {id: {$ref: '#/components/schemas/Id'}, examName: {type: string}, examType: {$ref: '#/components/schemas/ExamType'}, examDate: {type: string, format: date}, totalScore: {type: [number,'null']}, totalFullScore: {type: [number,'null']}, scoreRate: {type: [number,'null'], minimum: 0, maximum: 1}}}
+    MasterySummaryDto: {type: object, required: [knowledgeId,knowledgeCode,knowledgeName,masteryScore,evidenceCount], properties: {knowledgeId: {$ref: '#/components/schemas/Id'}, knowledgeCode: {type: string}, knowledgeName: {type: string}, subjectId: {type: [string,'null']}, subjectName: {type: [string,'null']}, masteryScore: {type: number, minimum: 0, maximum: 100}, evidenceCount: {type: integer}, nextReviewTime: {type: [string,'null'], format: date-time}}}
+    WrongQuestionSummaryDto: {type: object, required: [id,subjectId,subjectName,sourceType,questionText,status,reviewStage], properties: {id: {$ref: '#/components/schemas/Id'}, subjectId: {$ref: '#/components/schemas/Id'}, subjectName: {type: string}, sourceType: {$ref: '#/components/schemas/WrongSource'}, questionType: {type: [string,'null']}, questionText: {type: string}, status: {$ref: '#/components/schemas/WrongStatus'}, reviewStage: {type: string}, nextReviewTime: {type: [string,'null'], format: date-time}}}
+    ResourceSummaryDto: {type: object, required: [id,title,resourceType,sourceType,status], properties: {id: {$ref: '#/components/schemas/Id'}, title: {type: string}, resourceType: {type: string}, sourceType: {type: string}, status: {$ref: '#/components/schemas/ResourceStatus'}, durationSeconds: {type: [integer,'null'], minimum: 0}, latestProgressPercent: {type: [number,'null'], minimum: 0, maximum: 100}}}
+    DashboardDto: {type: object, required: [today,scoreTrends,weakKnowledge,dueReviews,waitingResources,recentStudyLogs,aiSuggestions,statisticsPeriod], properties: {today: {type: object, properties: {studyDurationSeconds: {type: integer}, completedTaskCount: {type: integer}, totalTaskCount: {type: integer}, dueReviewCount: {type: integer}, overdueReviewCount: {type: integer}, waitingResourceCount: {type: integer}, learningResourceCount: {type: integer}}}, latestExam: {oneOf: [{$ref: '#/components/schemas/ExamSummaryDto'}, {type: 'null'}]}, scoreTrends: {type: array, items: {$ref: '#/components/schemas/ScoreTrendPointDto'}}, weakKnowledge: {type: array, items: {$ref: '#/components/schemas/MasterySummaryDto'}}, dueReviews: {type: array, items: {$ref: '#/components/schemas/WrongQuestionSummaryDto'}}, waitingResources: {type: array, items: {$ref: '#/components/schemas/ResourceSummaryDto'}}, recentStudyLogs: {type: array, items: {$ref: '#/components/schemas/StudyLogDto'}}, aiSuggestions: {type: array, items: {type: string}}, statisticsPeriod: {type: object, required: [startDate,endDate], properties: {startDate: {type: string, format: date}, endDate: {type: string, format: date}, academicTermId: {type: [string,'null']}}}}}
+    DashboardResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/DashboardDto'}}}]}
+    ResourceHistoryPageResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/ResourceHistoryDto'}}}}]}}}]}
+    StudyLogPageResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/StudyLogDto'}}}}]}}}]}
     Attachment: {type: object, properties: {id: {$ref: '#/components/schemas/Id'}, fileName: {type: string}, mimeType: {type: [string,'null']}, fileSize: {type: integer, format: int64}, sha256: {type: string}, url: {type: string}}}
-    AiTask: {type: object, properties: {taskId: {type: string}, status: {$ref: '#/components/schemas/AiTaskStatus'}, progressStage: {type: [string,'null']}, progressPercent: {type: integer}}}
-    AiConfirmItem: {type: object, required: [temporaryQuestionId,save,questionText], properties: {temporaryQuestionId: {$ref: '#/components/schemas/Id'}, save: {type: boolean}, questionText: {type: string}, studentAnswer: {type: [string,'null']}, correctAnswer: {type: [string,'null']}, knowledgePoints: {type: array, items: {$ref: '#/components/schemas/KnowledgeLink'}}}}
-    AiConfirm: {type: object, required: [atomic,questions], properties: {atomic: {type: boolean}, questions: {type: array, items: {$ref: '#/components/schemas/AiConfirmItem'}}}}
-    AiConfirmResult: {type: object, properties: {createdCount: {type: integer}, ignoredCount: {type: integer}, failedCount: {type: integer}, wrongQuestionIds: {type: array, items: {$ref: '#/components/schemas/Id'}}, taskStatus: {$ref: '#/components/schemas/AiTaskStatus'}}}
-    ImportTask: {type: object, properties: {taskId: {type: string}, importType: {$ref: '#/components/schemas/ImportType'}, status: {$ref: '#/components/schemas/ImportStatus'}, totalRows: {type: integer}, validRows: {type: integer}, invalidRows: {type: integer}}}
-    ExportCreate: {type: object, required: [exportTypes,format], properties: {studentId: {$ref: '#/components/schemas/Id'}, exportTypes: {type: array, items: {type: string}}, format: {$ref: '#/components/schemas/ExportFormat'}, includeAttachments: {type: boolean}, includeDeleted: {type: boolean}}}
-    ExportTask: {type: object, properties: {taskId: {type: string}, status: {$ref: '#/components/schemas/AsyncStatus'}, downloadUrl: {type: [string,'null']}}}
-    BackupCreate: {type: object, required: [backupType], properties: {backupType: {$ref: '#/components/schemas/BackupType'}, remark: {type: [string,'null']}}}
-    Backup: {type: object, properties: {id: {$ref: '#/components/schemas/Id'}, backupCode: {type: string}, backupType: {$ref: '#/components/schemas/BackupType'}, status: {$ref: '#/components/schemas/BackupStatus'}, fileName: {type: [string,'null']}}}
-    RestoreCreate: {type: object, required: [confirmationText], properties: {confirmationText: {type: string, const: 确认恢复}}}
-    Restore: {type: object, properties: {taskId: {type: string}, status: {$ref: '#/components/schemas/RestoreStatus'}, progressPercent: {type: integer}}}
+    AiModelCreateRequest: {type: object, required: [name,provider,modelCode], properties: {name: {type: string}, provider: {$ref: '#/components/schemas/AiProvider'}, modelCode: {type: string}, apiBaseUrl: {type: [string,'null'], format: uri}, apiKey: {type: [string,'null'], writeOnly: true}, supportsVision: {type: boolean, default: false}, supportsJson: {type: boolean, default: true}, local: {type: boolean, default: false}, enabled: {type: boolean, default: true}, priority: {type: integer, default: 100}, timeoutSeconds: {type: integer, minimum: 1, default: 120}, remark: {type: [string,'null']}}}
+    AiModelUpdateRequest: {allOf: [{$ref: '#/components/schemas/AiModelCreateRequest'}, {type: object, required: [version], properties: {version: {type: integer}}}]}
+    AiModelDto: {type: object, required: [id,name,provider,modelCode,apiKeyConfigured,enabled,version,createdAt,updatedAt], properties: {id: {$ref: '#/components/schemas/Id'}, name: {type: string}, provider: {$ref: '#/components/schemas/AiProvider'}, modelCode: {type: string}, apiBaseUrl: {type: [string,'null'], format: uri}, apiKeyConfigured: {type: boolean}, apiKeyMasked: {type: [string,'null']}, supportsVision: {type: boolean}, supportsJson: {type: boolean}, local: {type: boolean}, enabled: {type: boolean}, priority: {type: integer}, timeoutSeconds: {type: integer, minimum: 1}, remark: {type: [string,'null']}, version: {type: integer}, createdAt: {type: string, format: date-time}, updatedAt: {type: string, format: date-time}}}
+    AiConnectionTestDto: {type: object, required: [available,durationMs,provider,modelCode,message,testedAt], properties: {available: {type: boolean}, durationMs: {type: integer}, provider: {$ref: '#/components/schemas/AiProvider'}, modelCode: {type: string}, message: {type: string}, testedAt: {type: string, format: date-time}}}
+    AiTask: {type: object, properties: {taskId: {type: string}, studentId: {$ref: '#/components/schemas/Id'}, subjectId: {type: [string,'null']}, gradeId: {type: [string,'null']}, sourceType: {$ref: '#/components/schemas/WrongSource'}, sourceName: {type: [string,'null']}, examId: {type: [string,'null']}, modelId: {$ref: '#/components/schemas/Id'}, status: {$ref: '#/components/schemas/AiTaskStatus'}, progressStage: {type: [string,'null']}, progressPercent: {type: integer, minimum: 0, maximum: 100}, inputType: {type: string}, fileCount: {type: integer}, questionCount: {type: integer}, warningCount: {type: integer}, retryCount: {type: integer}, maxRetryCount: {type: integer}, errorCode: {type: [string,'null']}, errorMessage: {type: [string,'null']}, startedAt: {type: [string,'null'], format: date-time}, finishedAt: {type: [string,'null'], format: date-time}, expiresAt: {type: [string,'null'], format: date-time}, createdAt: {type: string, format: date-time}}}
+    AiKnowledgeCandidateDto: {type: object, required: [knowledgeName,primary,confirmed,source], properties: {knowledgeId: {type: [string,'null']}, knowledgeCode: {type: [string,'null']}, knowledgeName: {type: string}, confidence: {type: [number,'null'], minimum: 0, maximum: 1}, primary: {type: boolean}, confirmed: {type: boolean}, source: {type: string, enum: [AI,USER]}}}
+    AiExtractionQuestionDto: {type: object, required: [id,taskId,sequenceNumber,questionText,status,userModified,knowledgeCandidates,warnings,createdAt,updatedAt], properties: {id: {$ref: '#/components/schemas/Id'}, taskId: {type: string}, sequenceNumber: {type: integer}, pageNumber: {type: [integer,'null']}, questionNumber: {type: [string,'null']}, questionType: {type: [string,'null']}, questionText: {type: string}, studentAnswer: {type: [string,'null']}, correctAnswer: {type: [string,'null']}, answerSource: {type: [string,'null']}, analysisText: {type: [string,'null']}, analysisSource: {type: [string,'null']}, errorType: {type: [string,'null']}, difficulty: {type: [integer,'null'], minimum: 1, maximum: 5}, confidence: {type: [number,'null'], minimum: 0, maximum: 1}, status: {$ref: '#/components/schemas/AiExtractionQuestionStatus'}, userModified: {type: boolean}, knowledgeCandidates: {type: array, items: {$ref: '#/components/schemas/AiKnowledgeCandidateDto'}}, warnings: {type: array, items: {type: string}}, createdAt: {type: string, format: date-time}, updatedAt: {type: string, format: date-time}}}
+    AiExtractionQuestionUpdateRequest: {type: object, properties: {questionType: {type: [string,'null']}, questionText: {type: string}, studentAnswer: {type: [string,'null']}, correctAnswer: {type: [string,'null']}, analysisText: {type: [string,'null']}, errorType: {type: [string,'null']}, difficulty: {type: [integer,'null'], minimum: 1, maximum: 5}, status: {$ref: '#/components/schemas/AiExtractionQuestionStatus'}, knowledgePoints: {type: array, items: {$ref: '#/components/schemas/KnowledgeLink'}}, version: {type: integer}, updatedAt: {type: [string,'null'], format: date-time}}}
+    AiConfirmItem: {type: object, required: [temporaryQuestionId,save,questionText], properties: {temporaryQuestionId: {$ref: '#/components/schemas/Id'}, save: {type: boolean}, questionType: {type: [string,'null']}, questionText: {type: string}, studentAnswer: {type: [string,'null']}, correctAnswer: {type: [string,'null']}, analysisText: {type: [string,'null']}, errorType: {type: [string,'null']}, difficulty: {type: [integer,'null']}, occurredDate: {type: [string,'null'], format: date}, knowledgePoints: {type: array, items: {$ref: '#/components/schemas/KnowledgeLink'}}}}
+    AiConfirm: {type: object, required: [atomic,questions], properties: {atomic: {type: boolean, default: true}, questions: {type: array, minItems: 1, items: {$ref: '#/components/schemas/AiConfirmItem'}}}}
+    AiExtractionConfirmRequest: {$ref: '#/components/schemas/AiConfirm'}
+    AiExtractionConfirmFailureDto: {type: object, required: [temporaryQuestionId,code,message], properties: {temporaryQuestionId: {$ref: '#/components/schemas/Id'}, code: {type: string}, message: {type: string}}}
+    AiConfirmResult: {type: object, properties: {createdCount: {type: integer}, ignoredCount: {type: integer}, failedCount: {type: integer}, wrongQuestionIds: {type: array, items: {$ref: '#/components/schemas/Id'}}, taskStatus: {$ref: '#/components/schemas/AiTaskStatus'}, failures: {type: array, items: {$ref: '#/components/schemas/AiExtractionConfirmFailureDto'}}}}
+    AiExtractionConfirmResultDto: {$ref: '#/components/schemas/AiConfirmResult'}
+    RetryAiExtractionRequest: {type: object, properties: {modelId: {type: [string,'null']}, resetTemporaryQuestions: {type: boolean, default: false}}}
+    CancelAiExtractionRequest: {type: object, properties: {reason: {type: [string,'null']}}}
+    AiAnalysisDto: {type: object, required: [id,businessType,modelId,modelName,status,createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, studentId: {type: [string,'null']}, businessType: {type: string}, businessId: {type: [string,'null']}, modelId: {$ref: '#/components/schemas/Id'}, modelName: {type: string}, promptTemplateId: {type: [string,'null']}, status: {type: string}, inputSummary: {type: [string,'null']}, result: {type: [object,'null']}, errorCode: {type: [string,'null']}, errorMessage: {type: [string,'null']}, promptTokens: {type: [integer,'null']}, completionTokens: {type: [integer,'null']}, durationMs: {type: [integer,'null']}, estimatedCost: {type: [number,'null']}, currencyCode: {type: [string,'null']}, createdAt: {type: string, format: date-time}}}
+    AiAnalysisPageResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/AiAnalysisDto'}}}}]}}}]}
+    AiProvider: {type: string, enum: [DOUBAO,QWEN,DEEPSEEK,OPENAI,OLLAMA,CUSTOM]}
+    AiExtractionQuestionStatus: {type: string, enum: [PENDING_REVIEW,CONFIRMED,IGNORED,SAVED,INVALID]}
+    StudyPlanStatus: {type: string, enum: [DRAFT,ACTIVE,PAUSED,COMPLETED,CANCELLED,EXPIRED]}
+    StudyPlanTaskStatus: {type: string, enum: [TODO,IN_PROGRESS,COMPLETED,SKIPPED,CANCELLED]}
+    StudyPlanTaskType: {type: string, enum: [WRONG_QUESTION_REVIEW,RESOURCE_LEARNING,KNOWLEDGE_PRACTICE,EXAM_REVIEW,READING,OTHER]}
+    ReportType: {type: string, enum: [DAILY,WEEKLY,MONTHLY,TERM,YEARLY,CUSTOM]}
+    GenerationType: {type: string, enum: [MANUAL,TEMPLATE,AI]}
+    GrowthReportStatus: {type: string, enum: [PENDING,RUNNING,SUCCESS,FAILED,CANCELLED]}
+    StudyPlanCreateRequest: {type: object, required: [studentId,title,planType,startDate,endDate], properties: {studentId: {$ref: '#/components/schemas/Id'}, title: {type: string}, planType: {type: string}, startDate: {type: string, format: date}, endDate: {type: string, format: date}, status: {$ref: '#/components/schemas/StudyPlanStatus', default: DRAFT}, dailyAvailableMinutes: {type: [integer,'null'], minimum: 1}, description: {type: [string,'null']}, tasks: {type: array, items: {$ref: '#/components/schemas/StudyPlanTaskCreateRequest'}}}}
+    StudyPlanUpdateRequest: {allOf: [{$ref: '#/components/schemas/StudyPlanCreateRequest'}, {type: object, required: [version], properties: {version: {type: integer}}}]}
+    StudyPlanGenerateRequest: {type: object, required: [studentId,startDate,endDate,dailyAvailableMinutes,modelId], properties: {studentId: {$ref: '#/components/schemas/Id'}, startDate: {type: string, format: date}, endDate: {type: string, format: date}, dailyAvailableMinutes: {type: integer, minimum: 1}, subjectIds: {type: array, items: {$ref: '#/components/schemas/Id'}}, targetKnowledgeIds: {type: array, items: {$ref: '#/components/schemas/Id'}}, includeWrongQuestionReview: {type: boolean, default: true}, includeResources: {type: boolean, default: true}, modelId: {$ref: '#/components/schemas/Id'}}}
+    StudyPlanDto: {allOf: [{$ref: '#/components/schemas/StudyPlanCreateRequest'}, {type: object, required: [id,studentId,title,planType,startDate,endDate,status,totalTaskCount,completedTaskCount,version,createdAt,updatedAt], properties: {id: {$ref: '#/components/schemas/Id'}, sourceAnalysisId: {type: [string,'null']}, totalTaskCount: {type: integer}, completedTaskCount: {type: integer}, version: {type: integer}, createdAt: {type: string, format: date-time}, updatedAt: {type: string, format: date-time}}}]}
+    StudyPlanTaskCreateRequest: {type: object, required: [taskDate,taskType,title], properties: {taskDate: {type: string, format: date}, taskType: {$ref: '#/components/schemas/StudyPlanTaskType'}, title: {type: string}, resourceId: {type: [string,'null']}, wrongQuestionId: {type: [string,'null']}, knowledgeId: {type: [string,'null']}, expectedDurationSeconds: {type: [integer,'null'], minimum: 0}, sortOrder: {type: integer, default: 0}, remark: {type: [string,'null']}}}
+    StudyPlanTaskUpdateRequest: {allOf: [{$ref: '#/components/schemas/StudyPlanTaskCreateRequest'}, {type: object, required: [version], properties: {version: {type: integer}, status: {$ref: '#/components/schemas/StudyPlanTaskStatus'}}}]}
+    StudyPlanTaskDto: {allOf: [{$ref: '#/components/schemas/StudyPlanTaskCreateRequest'}, {type: object, required: [id,studyPlanId,status,createdAt,updatedAt], properties: {id: {$ref: '#/components/schemas/Id'}, studyPlanId: {$ref: '#/components/schemas/Id'}, status: {$ref: '#/components/schemas/StudyPlanTaskStatus'}, completedAt: {type: [string,'null'], format: date-time}, createdAt: {type: string, format: date-time}, updatedAt: {type: string, format: date-time}}}]}
+    StudyPlanStatusChangeRequest: {type: object, properties: {reason: {type: [string,'null']}}}
+    CompleteStudyPlanTaskRequest: {type: object, properties: {completedAt: {type: [string,'null'], format: date-time}, actualDurationSeconds: {type: [integer,'null'], minimum: 0}, note: {type: [string,'null']}}}
+    SkipStudyPlanTaskRequest: {type: object, required: [reason], properties: {reason: {type: string, minLength: 1}}}
+    GrowthEventCreateRequest: {type: object, required: [studentId,eventType,title,eventDate], properties: {studentId: {$ref: '#/components/schemas/Id'}, eventType: {type: string}, title: {type: string}, eventDate: {type: string, format: date}, description: {type: [string,'null']}, tags: {type: array, items: {type: string}}, attachmentIds: {type: array, items: {$ref: '#/components/schemas/Id'}}}}
+    GrowthEventUpdateRequest: {allOf: [{$ref: '#/components/schemas/GrowthEventCreateRequest'}, {type: object, required: [version], properties: {version: {type: integer}}}]}
+    GrowthEventDto: {allOf: [{$ref: '#/components/schemas/GrowthEventCreateRequest'}, {type: object, required: [id,eventTypeLabel,version,createdAt,updatedAt], properties: {id: {$ref: '#/components/schemas/Id'}, eventTypeLabel: {type: string}, attachments: {type: array, items: {$ref: '#/components/schemas/Attachment'}}, version: {type: integer}, createdAt: {type: string, format: date-time}, updatedAt: {type: string, format: date-time}}}]}
+    GrowthReportCreateRequest: {type: object, required: [studentId,reportType,title,startDate,endDate,generationType], properties: {studentId: {$ref: '#/components/schemas/Id'}, reportType: {$ref: '#/components/schemas/ReportType'}, title: {type: string}, startDate: {type: string, format: date}, endDate: {type: string, format: date}, generationType: {$ref: '#/components/schemas/GenerationType'}, modelId: {type: [string,'null']}, includeAiAnalysis: {type: boolean, default: true}, includeAttachments: {type: boolean, default: false}}}
+    GrowthReportRegenerateRequest: {type: object, properties: {modelId: {type: [string,'null']}, reason: {type: [string,'null']}}}
+    GrowthReportDto: {allOf: [{$ref: '#/components/schemas/GrowthReportCreateRequest'}, {type: object, required: [id,status,version,createdAt,updatedAt], properties: {id: {$ref: '#/components/schemas/Id'}, status: {$ref: '#/components/schemas/GrowthReportStatus'}, statisticsSnapshot: {type: [object,'null']}, aiAnalysisId: {type: [string,'null']}, contentMarkdown: {type: [string,'null']}, version: {type: integer}, createdAt: {type: string, format: date-time}, updatedAt: {type: string, format: date-time}}}]}
+    StudyPlanPageResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/StudyPlanDto'}}}}]}}}]}
+    StudyPlanTaskPageResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/StudyPlanTaskDto'}}}}]}}}]}
+    GrowthEventPageResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/GrowthEventDto'}}}}]}}}]}
+    GrowthReportPageResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/GrowthReportDto'}}}}]}}}]}
+    ImportTask: {type: object, required: [taskId,importType,status,fileName,fileSize,totalRows,validRows,invalidRows,progressPercent,errorReportAvailable,createdAt,updatedAt], properties: {taskId: {type: string}, importType: {$ref: '#/components/schemas/ImportType'}, studentId: {type: [string,'null']}, status: {$ref: '#/components/schemas/ImportTaskStatus'}, fileName: {type: string}, fileSize: {type: integer, format: int64}, totalRows: {type: integer}, validRows: {type: integer}, invalidRows: {type: integer}, warningRows: {type: integer}, importedRows: {type: integer}, skippedRows: {type: integer}, failedRows: {type: integer}, progressPercent: {type: integer, minimum: 0, maximum: 100}, preview: {type: [object,'null']}, errorReportAvailable: {type: boolean}, errorCode: {type: [string,'null']}, errorMessage: {type: [string,'null']}, expiresAt: {type: [string,'null'], format: date-time}, createdAt: {type: string, format: date-time}, updatedAt: {type: string, format: date-time}, finishedAt: {type: [string,'null'], format: date-time}}}
+    ImportTaskDto: {allOf: [{$ref: '#/components/schemas/ImportTask'}]}
+    ImportConfirmRequest: {type: object, properties: {atomic: {type: boolean, default: true}, skipInvalidRows: {type: boolean, default: false}, duplicateStrategy: {$ref: '#/components/schemas/DuplicateStrategy', default: REJECT}, selectedRows: {type: array, items: {type: integer}, default: []}, confirmWarnings: {type: boolean, default: false}}}
+    RetryImportRequest: {type: object, properties: {retryInvalidRowsOnly: {type: boolean, default: true}, duplicateStrategy: {$ref: '#/components/schemas/DuplicateStrategy'}}}
+    CancelImportRequest: {type: object, properties: {reason: {type: [string,'null']}}}
+    ImportTaskPageResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/ImportTaskDto'}}}}]}}}]}
+    ExportCreate: {type: object, required: [exportTypes,format], properties: {studentId: {type: [string,'null']}, exportTypes: {type: array, minItems: 1, items: {$ref: '#/components/schemas/ExportType'}}, format: {$ref: '#/components/schemas/ExportFormat'}, startDate: {type: [string,'null'], format: date}, endDate: {type: [string,'null'], format: date}, includeAttachments: {type: boolean, default: false}, includeDeleted: {type: boolean, default: false}, includeAiAnalysis: {type: boolean, default: false}, includeSystemConfig: {type: boolean, default: false}, timezone: {type: [string,'null']}}}
+    ExportCreateRequest: {$ref: '#/components/schemas/ExportCreate'}
+    ExportTask: {type: object, required: [taskId,status,exportTypes,format,progressPercent,createdAt], properties: {taskId: {type: string}, studentId: {type: [string,'null']}, exportTypes: {type: array, items: {$ref: '#/components/schemas/ExportType'}}, format: {$ref: '#/components/schemas/ExportFormat'}, status: {$ref: '#/components/schemas/AsyncTaskStatus'}, includeAttachments: {type: boolean}, includeDeleted: {type: boolean}, fileName: {type: [string,'null']}, fileSize: {type: [integer,'null'], format: int64}, checksum: {type: [string,'null']}, downloadUrl: {type: [string,'null'], format: uri}, progressPercent: {type: integer, minimum: 0, maximum: 100}, errorMessage: {type: [string,'null']}, expiresAt: {type: [string,'null'], format: date-time}, createdAt: {type: string, format: date-time}, finishedAt: {type: [string,'null'], format: date-time}}}
+    ExportTaskDto: {$ref: '#/components/schemas/ExportTask'}
+    ExportTaskPageResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/ExportTaskDto'}}}}]}}}]}
+    BackupCreate: {type: object, required: [backupType], properties: {backupType: {$ref: '#/components/schemas/BackupType'}, includeAttachments: {type: boolean, default: true}, includeConfig: {type: boolean, default: true}, compression: {$ref: '#/components/schemas/CompressionType', default: ZIP}, encrypt: {type: boolean, default: false}, password: {type: [string,'null'], writeOnly: true}, remark: {type: [string,'null']}}}
+    BackupCreateRequest: {$ref: '#/components/schemas/BackupCreate'}
+    Backup: {type: object, required: [id,backupCode,backupType,status,createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, backupCode: {type: string}, backupType: {$ref: '#/components/schemas/BackupType'}, status: {$ref: '#/components/schemas/BackupStatus'}, fileName: {type: [string,'null']}, fileSize: {type: [integer,'null'], format: int64}, checksum: {type: [string,'null']}, compression: {$ref: '#/components/schemas/CompressionType'}, encrypted: {type: boolean}, systemVersion: {type: [string,'null']}, databaseVersion: {type: [string,'null']}, tableCount: {type: [integer,'null']}, attachmentCount: {type: [integer,'null']}, remark: {type: [string,'null']}, errorMessage: {type: [string,'null']}, createdAt: {type: string, format: date-time}, finishedAt: {type: [string,'null'], format: date-time}}}
+    BackupVerifyDto: {type: object, required: [valid,checksumMatched,manifestValid,databaseDumpPresent,attachmentArchivePresent,systemVersionCompatible,warnings,verifiedAt], properties: {valid: {type: boolean}, checksumMatched: {type: boolean}, manifestValid: {type: boolean}, databaseDumpPresent: {type: boolean}, attachmentArchivePresent: {type: boolean}, systemVersionCompatible: {type: boolean}, warnings: {type: array, items: {type: string}}, verifiedAt: {type: string, format: date-time}}}
+    RestoreCreate: {type: object, required: [confirmationText], properties: {confirmationText: {type: string, const: 确认恢复}, restoreDatabase: {type: boolean, default: true}, restoreAttachments: {type: boolean, default: true}, restoreConfig: {type: boolean, default: true}, createPreRestoreBackup: {type: boolean, default: true}, conflictStrategy: {$ref: '#/components/schemas/RestoreConflictStrategy', default: REPLACE}, password: {type: [string,'null'], writeOnly: true}}}
+    RestoreCreateRequest: {$ref: '#/components/schemas/RestoreCreate'}
+    Restore: {type: object, required: [taskId,backupId,status,progressPercent,createdAt], properties: {taskId: {type: string}, backupId: {$ref: '#/components/schemas/Id'}, status: {$ref: '#/components/schemas/RestoreStatus'}, progressStage: {type: [string,'null']}, progressPercent: {type: integer, minimum: 0, maximum: 100}, preRestoreBackupId: {type: [string,'null']}, restoredTableCount: {type: integer}, restoredAttachmentCount: {type: integer}, warningCount: {type: integer}, errorCode: {type: [string,'null']}, errorMessage: {type: [string,'null']}, createdAt: {type: string, format: date-time}, finishedAt: {type: [string,'null'], format: date-time}}}
+    RestoreTaskDto: {allOf: [{$ref: '#/components/schemas/Restore'}]}
+    RestoreTaskPageResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/RestoreTaskDto'}}}}]}}}]}
     ExamType: {type: string, enum: [DAILY_TEST,UNIT_TEST,WEEKLY_TEST,MONTHLY_EXAM,MIDTERM,FINAL,MOCK_EXAM,COMPETITION,OTHER]}
     WrongSource: {type: string, enum: [PRACTICE,EXAM]}
     WrongStatus: {type: string, enum: [NEW,REVIEWING,MASTERED,ARCHIVED]}
@@ -210,13 +590,69 @@ components:
     AiTaskStatus: {type: string, enum: [PENDING,RUNNING,REVIEW_REQUIRED,SUCCESS,FAILED,CANCELLED,EXPIRED]}
     ImportType: {type: string, enum: [SCORE,WRONG_QUESTION,LEARNING_RESOURCE,KNOWLEDGE,STUDENT,FULL_DATA]}
     ImportStatus: {type: string, enum: [UPLOADED,VALIDATING,PREVIEW_READY,IMPORTING,SUCCESS,PARTIAL_SUCCESS,FAILED,CANCELLED,EXPIRED]}
+    ImportTaskStatus: {$ref: '#/components/schemas/ImportStatus'}
+    DuplicateStrategy: {type: string, enum: [REJECT,SKIP,UPDATE]}
+    ExportType: {type: string, enum: [STUDENT,SCORE,WRONG_QUESTION,WRONG_REVIEW,LEARNING_RESOURCE,RESOURCE_HISTORY,STUDY_LOG,KNOWLEDGE,MASTERY,AI_ANALYSIS,STUDY_PLAN,GROWTH_EVENT,REPORT,FULL_DATA]}
     ExportFormat: {type: string, enum: [CSV,XLSX,JSON,MARKDOWN,PDF,ZIP,SQL]}
     AsyncStatus: {type: string, enum: [PENDING,RUNNING,SUCCESS,PARTIAL_SUCCESS,FAILED,CANCELLED,EXPIRED]}
+    AsyncTaskStatus: {$ref: '#/components/schemas/AsyncStatus'}
     BackupType: {type: string, enum: [DATABASE,ATTACHMENT,CONFIG,FULL,PRE_RESTORE,PRE_UPGRADE]}
+    CompressionType: {type: string, enum: [NONE,ZIP,GZIP]}
     BackupStatus: {type: string, enum: [PENDING,RUNNING,SUCCESS,FAILED,DELETED,EXPIRED]}
     RestoreStatus: {type: string, enum: [PENDING,CREATING_SNAPSHOT,VALIDATING,RESTORING_DATABASE,RESTORING_FILES,MIGRATING,VERIFYING,SUCCESS,FAILED,ROLLED_BACK]}
+    RestoreConflictStrategy: {type: string, enum: [REPLACE,MERGE,SKIP_EXISTING]}
     AttachmentCategory: {type: string, enum: [AVATAR,EXAM,WRONG_QUESTION,RESOURCE,GROWTH_EVENT,REPORT,IMPORT,EXPORT,BACKUP,OTHER]}
   responses:
+    ImportPage: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ImportTaskPageResponse'}}}}
+    ImportErrorExport: {description: 错误报告文件, content: {text/csv: {schema: {type: string, format: binary}}, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: {schema: {type: string, format: binary}}}}
+    ExportPage: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ExportTaskPageResponse'}}}}
+    ExportDownload: {description: 导出文件, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+    BackupDownload: {description: 备份文件, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+    BackupVerify: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/BackupVerifyDto'}}}]}}}}
+    RestorePage: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/RestoreTaskPageResponse'}}}}
+    StudyPlanPage: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/StudyPlanPageResponse'}}}}
+    StudyPlanOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/StudyPlanDto'}}}]}}}}
+    StudyPlanTaskPage: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/StudyPlanTaskPageResponse'}}}}
+    StudyPlanTaskOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/StudyPlanTaskDto'}}}]}}}}
+    GrowthEventPage: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/GrowthEventPageResponse'}}}}
+    GrowthEventOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/GrowthEventDto'}}}]}}}}
+    GrowthReportPage: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/GrowthReportPageResponse'}}}}
+    GrowthReportOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/GrowthReportDto'}}}]}}}}
+    GrowthReportExport: {description: 成功, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+    AiModelList: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/AiModelDto'}}}}]}}}}
+    AiModelOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/AiModelDto'}}}]}}}}
+    AiConnectionTest: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/AiConnectionTestDto'}}}]}}}}
+    AiExtractionQuestionPage: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/AiExtractionQuestionDto'}}}}]}}}]}}}}
+    AiExtractionQuestionOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/AiExtractionQuestionDto'}}}]}}}}
+    AiAnalysisPage: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/AiAnalysisPageResponse'}}}}
+    AiAnalysisOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/AiAnalysisDto'}}}]}}}}
+    ResourceHistoryOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/ResourceHistoryDto'}}}]}}}}
+    ResourceHistoryPage: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ResourceHistoryPageResponse'}}}}
+    StudyLogOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/StudyLogDto'}}}]}}}}
+    StudyLogPage: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/StudyLogPageResponse'}}}}
+    Dashboard: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/DashboardResponse'}}}}
+    StageList: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/StageDto'}}}}]}}}}
+    GradeList: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/GradeDto'}}}}]}}}}
+    SubjectList: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/SubjectDto'}}}}]}}}}
+    DictionaryItemList: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/DictionaryItemDto'}}}}]}}}}
+    AcademicTermList: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/AcademicTermDto'}}}}]}}}}
+    AcademicTermOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/AcademicTermDto'}}}]}}}}
+    ScorePage: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ScorePageResponse'}}}}
+    ScoreTrend: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ScoreTrendResponse'}}}}
+    KnowledgeTree: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/KnowledgeTreeNodeDto'}}}}]}}}}
+    KnowledgeNodeOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/KnowledgeTreeNodeDto'}}}]}}}}
+    MasteryList: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/MasteryDto'}}}}]}}}}
+    MasteryHistoryList: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/MasteryHistoryDto'}}}}]}}}]}}}}
+    MasteryOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/MasteryDto'}}}]}}}}
+    BadRequest: {$ref: '#/components/responses/Error'}
+    Unauthorized: {$ref: '#/components/responses/Error'}
+    Forbidden: {$ref: '#/components/responses/Error'}
+    NotFound: {$ref: '#/components/responses/Error'}
+    Conflict: {$ref: '#/components/responses/Error'}
+    PayloadTooLarge: {$ref: '#/components/responses/Error'}
+    UnsupportedMediaType: {$ref: '#/components/responses/Error'}
+    ValidationError: {$ref: '#/components/responses/Error'}
+    InternalServerError: {$ref: '#/components/responses/Error'}
     Error: {description: 失败, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
     StudentList: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/Student'}}}}]}}}}
     StudentOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/Student'}}}]}}}}

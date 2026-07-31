@@ -1,0 +1,59 @@
+openapi: 3.1.0
+info:
+  title: Student Growth Archive API
+  version: 2.0.0
+servers:
+  - url: /api/v1
+paths:
+  /stages: {get: {summary: 查询学段, responses: {'200': {description: 成功}}}}
+  /grades: {get: {summary: 查询年级, responses: {'200': {description: 成功}}}}
+  /subjects: {get: {summary: 查询学科, responses: {'200': {description: 成功}}}}
+  /dictionaries/{dictType}: {get: {summary: 查询字典, parameters: [{name: dictType, in: path, required: true, schema: {type: string}}], responses: {'200': {description: 成功}}}}
+  /students: {get: {summary: 查询学生, responses: {'200': {description: 成功}}}, post: {summary: 新增学生, responses: {'201': {description: 创建成功}}}}
+  /students/{studentId}: {get: {summary: 查询学生详情, responses: {'200': {description: 成功}}}, put: {summary: 修改学生, responses: {'200': {description: 成功}}}}
+  /academic-terms: {get: {summary: 查询学期, responses: {'200': {description: 成功}}}, post: {summary: 新增学期, responses: {'201': {description: 创建成功}}}}
+  /exams: {post: {summary: 新增考试和成绩, responses: {'201': {description: 创建成功}}}}
+  /exams/{examId}: {get: {summary: 考试详情, responses: {'200': {description: 成功}}}, put: {summary: 修改考试, responses: {'200': {description: 成功}}}, delete: {summary: 删除考试, responses: {'204': {description: 已删除}}}}
+  /scores: {get: {summary: 查询成绩, responses: {'200': {description: 成功}}}}
+  /scores/trends: {get: {summary: 成绩趋势, responses: {'200': {description: 成功}}}}
+  /wrong-questions: {get: {summary: 查询错题, responses: {'200': {description: 成功}}}, post: {summary: 新增错题, responses: {'201': {description: 创建成功}}}}
+  /wrong-questions/{wrongQuestionId}: {get: {summary: 错题详情, responses: {'200': {description: 成功}}}, put: {summary: 修改错题, responses: {'200': {description: 成功}}}, delete: {summary: 删除错题, responses: {'204': {description: 已删除}}}}
+  /wrong-questions/{wrongQuestionId}/reviews: {post: {summary: 提交复习结果, responses: {'201': {description: 创建成功}}}}
+  /reviews/due: {get: {summary: 待复习错题, responses: {'200': {description: 成功}}}}
+  /knowledge/tree: {get: {summary: 知识树, responses: {'200': {description: 成功}}}}
+  /knowledge/nodes: {post: {summary: 新增知识点, responses: {'201': {description: 创建成功}}}}
+  /knowledge/mastery: {get: {summary: 掌握度, responses: {'200': {description: 成功}}}}
+  /knowledge/mastery/{knowledgeId}/history: {get: {summary: 掌握度历史, responses: {'200': {description: 成功}}}}
+  /resources: {get: {summary: 查询资源, responses: {'200': {description: 成功}}}, post: {summary: 新增资源, responses: {'201': {description: 创建成功}}}}
+  /resources/{resourceId}: {put: {summary: 修改资源, responses: {'200': {description: 成功}}}}
+  /resources/{resourceId}/history: {post: {summary: 新增学习历史, responses: {'201': {description: 创建成功}}}}
+  /dashboard: {get: {summary: Dashboard聚合, responses: {'200': {description: 成功}}}}
+  /attachments: {post: {summary: 上传附件, responses: {'201': {description: 上传成功}}}}
+  /ai/models: {get: {summary: 查询AI模型, responses: {'200': {description: 成功}}}, post: {summary: 新增AI模型, responses: {'201': {description: 创建成功}}}}
+  /ai/wrong-question-extractions: {post: {summary: 创建AI错题识别任务, responses: {'202': {description: 已受理}}}}
+  /ai/wrong-question-extractions/{taskId}: {get: {summary: 查询识别任务, responses: {'200': {description: 成功}}}}
+  /ai/wrong-question-extractions/{taskId}/confirm: {post: {summary: 确认识别结果, responses: {'200': {description: 保存成功}}}}
+  /ai/analyses: {get: {summary: AI分析历史, responses: {'200': {description: 成功}}}}
+  /study-plans: {get: {summary: 查询学习计划, responses: {'200': {description: 成功}}}, post: {summary: 创建学习计划, responses: {'201': {description: 创建成功}}}}
+  /study-plans/generate: {post: {summary: AI生成学习计划, responses: {'202': {description: 已受理}}}}
+  /reports: {get: {summary: 查询成长报告, responses: {'200': {description: 成功}}}, post: {summary: 创建成长报告, responses: {'202': {description: 已受理}}}}
+  /growth-events: {get: {summary: 查询成长事件, responses: {'200': {description: 成功}}}, post: {summary: 新增成长事件, responses: {'201': {description: 创建成功}}}}
+  /imports: {post: {summary: 创建导入任务, responses: {'202': {description: 已受理}}}}
+  /imports/{taskId}: {get: {summary: 查询导入任务, responses: {'200': {description: 成功}}}}
+  /imports/{taskId}/confirm: {post: {summary: 确认导入, responses: {'200': {description: 成功}}}}
+  /exports: {post: {summary: 创建导出任务, responses: {'202': {description: 已受理}}}}
+  /exports/{taskId}: {get: {summary: 查询导出任务, responses: {'200': {description: 成功}}}}
+  /backups: {get: {summary: 查询备份, responses: {'200': {description: 成功}}}, post: {summary: 创建备份, responses: {'202': {description: 已受理}}}}
+  /backups/{backupId}/restore: {post: {summary: 创建恢复任务, responses: {'202': {description: 已受理}}}}
+  /restores/{taskId}: {get: {summary: 查询恢复任务, responses: {'200': {description: 成功}}}}
+components:
+  schemas:
+    Id: {type: string, pattern: '^[0-9]+$'}
+    ApiResponse: {type: object, properties: {code: {type: string}, message: {type: string}, data: {}, requestId: {type: string}, timestamp: {type: string, format: date-time}}}
+    PageResult: {type: object, properties: {items: {type: array, items: {}}, page: {type: integer}, pageSize: {type: integer}, total: {type: integer}, totalPages: {type: integer}}}
+    ErrorResponse: {type: object, properties: {code: {type: string}, message: {type: string}, data: {type: object}, requestId: {type: string}, timestamp: {type: string, format: date-time}}}
+    WrongQuestionSourceType: {type: string, enum: [PRACTICE, EXAM]}
+    WrongQuestionStatus: {type: string, enum: [NEW, REVIEWING, MASTERED, ARCHIVED]}
+    ReviewResult: {type: string, enum: [CORRECT, PARTIAL, WRONG, UNKNOWN]}
+    ResourceStatus: {type: string, enum: [WAITING, LEARNING, COMPLETED, REVIEW, ARCHIVED]}
+    AiStatus: {type: string, enum: [PENDING, RUNNING, REVIEW_REQUIRED, SUCCESS, FAILED, CANCELLED, EXPIRED]}

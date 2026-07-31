@@ -1,0 +1,236 @@
+openapi: 3.1.0
+info: {title: Student Growth Archive API, version: 3.0.0}
+servers: [{url: /api/v1}]
+paths:
+  /students:
+    get: {summary: 查询学生列表, responses: {'200': {$ref: '#/components/responses/StudentList'}}}
+    post:
+      summary: 新增学生
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudentCreate'}}}}
+      responses: {'201': {$ref: '#/components/responses/StudentOne'}, '422': {$ref: '#/components/responses/Error'}}
+  /students/{studentId}:
+    parameters: [{$ref: '#/components/parameters/StudentId'}]
+    get: {summary: 查询学生详情, responses: {'200': {$ref: '#/components/responses/StudentOne'}, '404': {$ref: '#/components/responses/Error'}}}
+    put:
+      summary: 修改学生
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StudentUpdate'}}}}
+      responses: {'200': {$ref: '#/components/responses/StudentOne'}, '409': {$ref: '#/components/responses/Error'}}
+  /exams:
+    post:
+      summary: 新增考试及成绩
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ExamCreate'}}}}
+      responses: {'201': {$ref: '#/components/responses/ExamOne'}}
+  /exams/{examId}:
+    parameters: [{$ref: '#/components/parameters/ExamId'}]
+    get: {summary: 查询考试, responses: {'200': {$ref: '#/components/responses/ExamOne'}}}
+    put:
+      summary: 修改考试
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ExamUpdate'}}}}
+      responses: {'200': {$ref: '#/components/responses/ExamOne'}}
+    delete: {summary: 删除考试, responses: {'204': {description: 删除成功}}}
+  /wrong-questions:
+    get:
+      summary: 分页查询错题
+      parameters: [{$ref: '#/components/parameters/StudentIdQuery'}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}]
+      responses: {'200': {$ref: '#/components/responses/WrongPage'}}
+    post:
+      summary: 新增错题
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/WrongCreate'}}}}
+      responses: {'201': {$ref: '#/components/responses/WrongOne'}}
+  /wrong-questions/{wrongQuestionId}:
+    parameters: [{$ref: '#/components/parameters/WrongId'}]
+    get: {summary: 查询错题, responses: {'200': {$ref: '#/components/responses/WrongOne'}}}
+    put:
+      summary: 修改错题
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/WrongUpdate'}}}}
+      responses: {'200': {$ref: '#/components/responses/WrongOne'}}
+    delete: {summary: 删除错题, responses: {'204': {description: 删除成功}}}
+  /wrong-questions/{wrongQuestionId}/reviews:
+    parameters: [{$ref: '#/components/parameters/WrongId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+    post:
+      summary: 提交复习结果
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ReviewCreate'}}}}
+      responses: {'201': {$ref: '#/components/responses/ReviewOne'}}
+  /resources:
+    get:
+      summary: 分页查询资源
+      parameters: [{$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PageSize'}]
+      responses: {'200': {$ref: '#/components/responses/ResourcePage'}}
+    post:
+      summary: 新增资源
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ResourceCreate'}}}}
+      responses: {'201': {$ref: '#/components/responses/ResourceOne'}}
+  /resources/{resourceId}:
+    parameters: [{$ref: '#/components/parameters/ResourceId'}]
+    get: {summary: 查询资源, responses: {'200': {$ref: '#/components/responses/ResourceOne'}}}
+    put:
+      summary: 修改资源
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ResourceUpdate'}}}}
+      responses: {'200': {$ref: '#/components/responses/ResourceOne'}}
+  /attachments:
+    post:
+      summary: 上传附件
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, category]
+              properties:
+                file: {type: string, format: binary}
+                category: {$ref: '#/components/schemas/AttachmentCategory'}
+      responses: {'201': {$ref: '#/components/responses/AttachmentOne'}, '413': {$ref: '#/components/responses/Error'}, '415': {$ref: '#/components/responses/Error'}}
+  /attachments/{attachmentId}/content:
+    parameters: [{$ref: '#/components/parameters/AttachmentId'}]
+    get:
+      summary: 下载附件
+      responses:
+        '200': {description: 文件, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+  /ai/wrong-question-extractions:
+    post:
+      summary: 创建AI错题识别任务
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files, studentId, sourceType, modelId]
+              properties:
+                files: {type: array, minItems: 1, maxItems: 20, items: {type: string, format: binary}}
+                studentId: {$ref: '#/components/schemas/Id'}
+                sourceType: {$ref: '#/components/schemas/WrongSource'}
+                modelId: {$ref: '#/components/schemas/Id'}
+      responses: {'202': {$ref: '#/components/responses/AiTaskOne'}}
+  /ai/wrong-question-extractions/{taskId}:
+    parameters: [{$ref: '#/components/parameters/TaskId'}]
+    get: {summary: 查询AI任务, responses: {'200': {$ref: '#/components/responses/AiTaskOne'}}}
+  /ai/wrong-question-extractions/{taskId}/confirm:
+    parameters: [{$ref: '#/components/parameters/TaskId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+    post:
+      summary: 确认识别结果
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AiConfirm'}}}}
+      responses: {'200': {$ref: '#/components/responses/AiConfirmOne'}}
+  /imports:
+    post:
+      summary: 创建导入任务
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, importType]
+              properties:
+                file: {type: string, format: binary}
+                importType: {$ref: '#/components/schemas/ImportType'}
+                studentId: {$ref: '#/components/schemas/Id'}
+      responses: {'202': {$ref: '#/components/responses/ImportOne'}}
+  /imports/{taskId}:
+    parameters: [{$ref: '#/components/parameters/TaskId'}]
+    get: {summary: 查询导入任务, responses: {'200': {$ref: '#/components/responses/ImportOne'}}}
+  /imports/{taskId}/confirm:
+    parameters: [{$ref: '#/components/parameters/TaskId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+    post: {summary: 确认导入, responses: {'200': {$ref: '#/components/responses/ImportOne'}}}
+  /exports:
+    post:
+      summary: 创建导出任务
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ExportCreate'}}}}
+      responses: {'202': {$ref: '#/components/responses/ExportOne'}}
+  /exports/{taskId}:
+    parameters: [{$ref: '#/components/parameters/TaskId'}]
+    get: {summary: 查询导出任务, responses: {'200': {$ref: '#/components/responses/ExportOne'}}}
+  /backups:
+    get: {summary: 查询备份, responses: {'200': {$ref: '#/components/responses/BackupList'}}}
+    post:
+      summary: 创建备份
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/BackupCreate'}}}}
+      responses: {'202': {$ref: '#/components/responses/BackupOne'}}
+  /backups/{backupId}/restore:
+    parameters: [{$ref: '#/components/parameters/BackupId'}]
+    post:
+      summary: 创建恢复任务
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RestoreCreate'}}}}
+      responses: {'202': {$ref: '#/components/responses/RestoreOne'}}
+  /restores/{taskId}:
+    parameters: [{$ref: '#/components/parameters/TaskId'}]
+    get: {summary: 查询恢复任务, responses: {'200': {$ref: '#/components/responses/RestoreOne'}}}
+components:
+  parameters:
+    StudentId: {name: studentId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    ExamId: {name: examId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    WrongId: {name: wrongQuestionId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    ResourceId: {name: resourceId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    AttachmentId: {name: attachmentId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    BackupId: {name: backupId, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    TaskId: {name: taskId, in: path, required: true, schema: {type: string}}
+    StudentIdQuery: {name: studentId, in: query, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    Page: {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
+    PageSize: {name: pageSize, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 8, maxLength: 64}}
+  schemas:
+    Id: {type: string, pattern: '^[0-9]+$', example: '1'}
+    Envelope: {type: object, required: [code,message,requestId,timestamp], properties: {code: {type: string}, message: {type: string}, requestId: {type: string}, timestamp: {type: string, format: date-time}}}
+    Error: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: object, additionalProperties: true}}}]}
+    Page: {type: object, required: [page,pageSize,total,totalPages], properties: {page: {type: integer}, pageSize: {type: integer}, total: {type: integer, format: int64}, totalPages: {type: integer}}}
+    StudentCreate: {type: object, required: [name,currentStageId,currentGradeId], properties: {name: {type: string}, birthday: {type: [string,'null'], format: date}, school: {type: [string,'null']}, currentStageId: {$ref: '#/components/schemas/Id'}, currentGradeId: {$ref: '#/components/schemas/Id'}, remark: {type: [string,'null']}}}
+    StudentUpdate: {allOf: [{$ref: '#/components/schemas/StudentCreate'}, {type: object, required: [version], properties: {version: {type: integer}}}]}
+    Student: {allOf: [{$ref: '#/components/schemas/StudentCreate'}, {type: object, required: [id,studentCode,version], properties: {id: {$ref: '#/components/schemas/Id'}, studentCode: {type: string}, version: {type: integer}}}]}
+    SubjectScore: {type: object, required: [subjectId,score,fullScore], properties: {subjectId: {$ref: '#/components/schemas/Id'}, score: {type: number}, fullScore: {type: number}, classRank: {type: [integer,'null']}, gradeRank: {type: [integer,'null']}}}
+    ExamCreate: {type: object, required: [studentId,examName,examType,examDate,subjects], properties: {studentId: {$ref: '#/components/schemas/Id'}, academicTermId: {$ref: '#/components/schemas/Id'}, examName: {type: string}, examType: {$ref: '#/components/schemas/ExamType'}, examDate: {type: string, format: date}, subjects: {type: array, minItems: 1, items: {$ref: '#/components/schemas/SubjectScore'}}}}
+    ExamUpdate: {allOf: [{$ref: '#/components/schemas/ExamCreate'}, {type: object, required: [version], properties: {version: {type: integer}}}]}
+    Exam: {allOf: [{$ref: '#/components/schemas/ExamCreate'}, {type: object, required: [id,version], properties: {id: {$ref: '#/components/schemas/Id'}, version: {type: integer}}}]}
+    KnowledgeLink: {type: object, required: [knowledgeId,primary], properties: {knowledgeId: {$ref: '#/components/schemas/Id'}, primary: {type: boolean}, confidence: {type: [number,'null'], minimum: 0, maximum: 1}}}
+    WrongCreate: {type: object, required: [studentId,subjectId,sourceType,questionText], properties: {studentId: {$ref: '#/components/schemas/Id'}, subjectId: {$ref: '#/components/schemas/Id'}, sourceType: {$ref: '#/components/schemas/WrongSource'}, questionText: {type: string}, studentAnswer: {type: [string,'null']}, correctAnswer: {type: [string,'null']}, analysisText: {type: [string,'null']}, errorType: {type: [string,'null']}, difficulty: {type: [integer,'null'], minimum: 1, maximum: 5}, knowledgePoints: {type: array, items: {$ref: '#/components/schemas/KnowledgeLink'}}}}
+    WrongUpdate: {allOf: [{$ref: '#/components/schemas/WrongCreate'}, {type: object, required: [version], properties: {version: {type: integer}, status: {$ref: '#/components/schemas/WrongStatus'}}}]}
+    Wrong: {allOf: [{$ref: '#/components/schemas/WrongCreate'}, {type: object, required: [id,status,version], properties: {id: {$ref: '#/components/schemas/Id'}, status: {$ref: '#/components/schemas/WrongStatus'}, version: {type: integer}}}]}
+    ReviewCreate: {type: object, required: [reviewTime,result], properties: {reviewTime: {type: string, format: date-time}, result: {$ref: '#/components/schemas/ReviewResult'}, durationSeconds: {type: [integer,'null']}, studentAnswer: {type: [string,'null']}, remark: {type: [string,'null']}}}
+    ReviewOutcome: {type: object, properties: {reviewId: {$ref: '#/components/schemas/Id'}, wrongQuestionStatus: {$ref: '#/components/schemas/WrongStatus'}, masteryScore: {type: number}, nextReviewTime: {type: [string,'null'], format: date-time}}}
+    ResourceCreate: {type: object, required: [title,resourceType,sourceType,status], properties: {title: {type: string}, resourceType: {type: string}, sourceType: {type: string}, sourceUrl: {type: [string,'null']}, status: {$ref: '#/components/schemas/ResourceStatus'}, knowledgeIds: {type: array, items: {$ref: '#/components/schemas/Id'}}}}
+    ResourceUpdate: {allOf: [{$ref: '#/components/schemas/ResourceCreate'}, {type: object, required: [version], properties: {version: {type: integer}}}]}
+    Resource: {allOf: [{$ref: '#/components/schemas/ResourceCreate'}, {type: object, required: [id,resourceCode,version], properties: {id: {$ref: '#/components/schemas/Id'}, resourceCode: {type: string}, version: {type: integer}}}]}
+    Attachment: {type: object, properties: {id: {$ref: '#/components/schemas/Id'}, fileName: {type: string}, mimeType: {type: [string,'null']}, fileSize: {type: integer, format: int64}, sha256: {type: string}, url: {type: string}}}
+    AiTask: {type: object, properties: {taskId: {type: string}, status: {$ref: '#/components/schemas/AiTaskStatus'}, progressStage: {type: [string,'null']}, progressPercent: {type: integer}}}
+    AiConfirmItem: {type: object, required: [temporaryQuestionId,save,questionText], properties: {temporaryQuestionId: {$ref: '#/components/schemas/Id'}, save: {type: boolean}, questionText: {type: string}, studentAnswer: {type: [string,'null']}, correctAnswer: {type: [string,'null']}, knowledgePoints: {type: array, items: {$ref: '#/components/schemas/KnowledgeLink'}}}}
+    AiConfirm: {type: object, required: [atomic,questions], properties: {atomic: {type: boolean}, questions: {type: array, items: {$ref: '#/components/schemas/AiConfirmItem'}}}}
+    AiConfirmResult: {type: object, properties: {createdCount: {type: integer}, ignoredCount: {type: integer}, failedCount: {type: integer}, wrongQuestionIds: {type: array, items: {$ref: '#/components/schemas/Id'}}, taskStatus: {$ref: '#/components/schemas/AiTaskStatus'}}}
+    ImportTask: {type: object, properties: {taskId: {type: string}, importType: {$ref: '#/components/schemas/ImportType'}, status: {$ref: '#/components/schemas/ImportStatus'}, totalRows: {type: integer}, validRows: {type: integer}, invalidRows: {type: integer}}}
+    ExportCreate: {type: object, required: [exportTypes,format], properties: {studentId: {$ref: '#/components/schemas/Id'}, exportTypes: {type: array, items: {type: string}}, format: {$ref: '#/components/schemas/ExportFormat'}, includeAttachments: {type: boolean}, includeDeleted: {type: boolean}}}
+    ExportTask: {type: object, properties: {taskId: {type: string}, status: {$ref: '#/components/schemas/AsyncStatus'}, downloadUrl: {type: [string,'null']}}}
+    BackupCreate: {type: object, required: [backupType], properties: {backupType: {$ref: '#/components/schemas/BackupType'}, remark: {type: [string,'null']}}}
+    Backup: {type: object, properties: {id: {$ref: '#/components/schemas/Id'}, backupCode: {type: string}, backupType: {$ref: '#/components/schemas/BackupType'}, status: {$ref: '#/components/schemas/BackupStatus'}, fileName: {type: [string,'null']}}}
+    RestoreCreate: {type: object, required: [confirmationText], properties: {confirmationText: {type: string, const: 确认恢复}}}
+    Restore: {type: object, properties: {taskId: {type: string}, status: {$ref: '#/components/schemas/RestoreStatus'}, progressPercent: {type: integer}}}
+    ExamType: {type: string, enum: [DAILY_TEST,UNIT_TEST,WEEKLY_TEST,MONTHLY_EXAM,MIDTERM,FINAL,MOCK_EXAM,COMPETITION,OTHER]}
+    WrongSource: {type: string, enum: [PRACTICE,EXAM]}
+    WrongStatus: {type: string, enum: [NEW,REVIEWING,MASTERED,ARCHIVED]}
+    ReviewResult: {type: string, enum: [CORRECT,PARTIAL,WRONG,UNKNOWN]}
+    ResourceStatus: {type: string, enum: [WAITING,LEARNING,COMPLETED,REVIEW,ARCHIVED]}
+    AiTaskStatus: {type: string, enum: [PENDING,RUNNING,REVIEW_REQUIRED,SUCCESS,FAILED,CANCELLED,EXPIRED]}
+    ImportType: {type: string, enum: [SCORE,WRONG_QUESTION,LEARNING_RESOURCE,KNOWLEDGE,STUDENT,FULL_DATA]}
+    ImportStatus: {type: string, enum: [UPLOADED,VALIDATING,PREVIEW_READY,IMPORTING,SUCCESS,PARTIAL_SUCCESS,FAILED,CANCELLED,EXPIRED]}
+    ExportFormat: {type: string, enum: [CSV,XLSX,JSON,MARKDOWN,PDF,ZIP,SQL]}
+    AsyncStatus: {type: string, enum: [PENDING,RUNNING,SUCCESS,PARTIAL_SUCCESS,FAILED,CANCELLED,EXPIRED]}
+    BackupType: {type: string, enum: [DATABASE,ATTACHMENT,CONFIG,FULL,PRE_RESTORE,PRE_UPGRADE]}
+    BackupStatus: {type: string, enum: [PENDING,RUNNING,SUCCESS,FAILED,DELETED,EXPIRED]}
+    RestoreStatus: {type: string, enum: [PENDING,CREATING_SNAPSHOT,VALIDATING,RESTORING_DATABASE,RESTORING_FILES,MIGRATING,VERIFYING,SUCCESS,FAILED,ROLLED_BACK]}
+    AttachmentCategory: {type: string, enum: [AVATAR,EXAM,WRONG_QUESTION,RESOURCE,GROWTH_EVENT,REPORT,IMPORT,EXPORT,BACKUP,OTHER]}
+  responses:
+    Error: {description: 失败, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+    StudentList: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/Student'}}}}]}}}}
+    StudentOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/Student'}}}]}}}}
+    ExamOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/Exam'}}}]}}}}
+    WrongPage: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Wrong'}}}}]}}}]}}}}
+    WrongOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/Wrong'}}}]}}}}
+    ReviewOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/ReviewOutcome'}}}]}}}}
+    ResourcePage: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Resource'}}}}]}}}]}}}}
+    ResourceOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/Resource'}}}]}}}}
+    AttachmentOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/Attachment'}}}]}}}}
+    AiTaskOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/AiTask'}}}]}}}}
+    AiConfirmOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/AiConfirmResult'}}}]}}}}
+    ImportOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/ImportTask'}}}]}}}}
+    ExportOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/ExportTask'}}}]}}}}
+    BackupList: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/Backup'}}}}]}}}}
+    BackupOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/Backup'}}}]}}}}
+    RestoreOne: {description: 成功, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/Restore'}}}]}}}}

@@ -1,0 +1,8 @@
+erDiagram
+STUDENT ||--o{ EXAM : has
+EXAM ||--o{ SCORE_RECORD : contains
+STUDENT ||--o{ WRONG_QUESTION : owns
+WRONG_QUESTION ||--o{ WRONG_REVIEW : reviewed
+KNOWLEDGE_NODE ||--o{ STUDENT_MASTERY : measured
+STUDENT_MASTERY ||--o{ MASTERY_HISTORY : records
+AI_EXTRACTION_TASK ||--o{ AI_EXTRACTION_QUESTION : produces

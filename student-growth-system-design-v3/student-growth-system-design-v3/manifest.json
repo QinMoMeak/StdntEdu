@@ -1,0 +1,8 @@
+{
+  "name": "student-growth-system-design-v3",
+  "version": "3.0.0",
+  "file_count": 32,
+  "flyway_versions": 13,
+  "openapi_yaml_valid": true,
+  "path_parameters_checked": true
+}

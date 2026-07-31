@@ -1,0 +1,23 @@
+openapi: 3.1.0
+info:
+  title: Student Growth Archive API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+paths:
+  /students:
+    get: {summary: 查询学生, responses: {'200': {description: 成功}}}
+    post: {summary: 新增学生, responses: {'201': {description: 创建成功}}}
+  /exams:
+    post: {summary: 新增考试和多科成绩, responses: {'201': {description: 创建成功}}}
+  /wrong-questions:
+    get: {summary: 查询错题, responses: {'200': {description: 成功}}}
+    post: {summary: 新增错题, responses: {'201': {description: 创建成功}}}
+  /knowledge/tree:
+    get: {summary: 查询知识树, responses: {'200': {description: 成功}}}
+  /resources:
+    get: {summary: 查询学习资源, responses: {'200': {description: 成功}}}
+  /ai/wrong-question-extractions:
+    post: {summary: 创建AI错题识别任务, responses: {'202': {description: 已受理}}}
+  /backups:
+    post: {summary: 创建备份, responses: {'202': {description: 已受理}}}

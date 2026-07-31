@@ -1,0 +1,8 @@
+{
+  "name": "student-growth-system-design-v2",
+  "version": "2.0.0",
+  "file_count": 19,
+  "executable_schema": true,
+  "flyway": true,
+  "openapi": true
+}

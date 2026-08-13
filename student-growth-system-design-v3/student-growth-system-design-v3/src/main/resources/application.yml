@@ -3,3 +3,5 @@ spring:
     name: student-growth-baseline
   profiles:
     active: local
+app:
+  version: 0.2.0-SNAPSHOT

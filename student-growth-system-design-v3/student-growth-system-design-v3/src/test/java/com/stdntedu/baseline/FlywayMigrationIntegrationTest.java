@@ -14,6 +14,7 @@ import java.util.Map;
 
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.utility.DockerImageName;
@@ -36,6 +37,25 @@ class FlywayMigrationIntegrationTest {
 
     @Test
     void migratesEmptyDatabaseAndValidatesBaseline() throws SQLException {
+        Flyway baselineFlyway = Flyway.configure()
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .locations("classpath:db/migration")
+                .target(MigrationVersion.fromVersion("13"))
+                .load();
+
+        baselineFlyway.migrate();
+
+        List<String> originalConfigKeys;
+        List<String> schemaBeforeV14;
+        try (Connection connection = DriverManager.getConnection(
+                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
+            assertEquals("13", baselineFlyway.info().current().getVersion().toString());
+            assertEquals(42, countBusinessTables(connection));
+            assertExistingAlgorithmConfig(connection);
+            originalConfigKeys = queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key");
+            schemaBeforeV14 = schemaSignature(connection);
+        }
+
         Flyway flyway = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration")
@@ -46,10 +66,14 @@ class FlywayMigrationIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
             assertExecutedVersions(flyway);
+            assertEquals("14", flyway.info().current().getVersion().toString());
             assertEquals(42, countBusinessTables(connection));
             assertBasicData(connection);
             assertDictionaryData(connection);
             assertAlgorithmConfig(connection);
+            assertTrue(queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key")
+                    .containsAll(originalConfigKeys));
+            assertEquals(schemaBeforeV14, schemaSignature(connection));
             assertConstraints(connection);
         }
     }
@@ -61,7 +85,7 @@ class FlywayMigrationIntegrationTest {
                 .toList();
 
         assertEquals(
-                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"),
+                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"),
                 versions);
     }
 
@@ -103,12 +127,44 @@ class FlywayMigrationIntegrationTest {
         }
     }
 
-    private void assertAlgorithmConfig(Connection connection) throws SQLException {
+    private void assertExistingAlgorithmConfig(Connection connection) throws SQLException {
         assertEquals(27, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
         assertEquals(1, queryInt(connection,
                 "SELECT COUNT(*) FROM system_config WHERE config_key = 'review.interval.days' AND config_value = '[1,3,7,15,30,60,120]'"));
         assertEquals(1, queryInt(connection,
                 "SELECT COUNT(*) FROM system_config WHERE config_key = 'mastery.max_daily_decrease' AND config_value = '25'"));
+    }
+
+    private void assertAlgorithmConfig(Connection connection) throws SQLException {
+        assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
+        assertEquals(1, queryInt(connection,
+                "SELECT COUNT(*) FROM system_config WHERE config_key = 'mastery.algorithm.version' AND config_value = '1.0'"));
+        assertEquals(1, queryInt(connection,
+                "SELECT COUNT(*) FROM system_config WHERE config_key = 'mastery.score_rate.correct_min' AND config_value = '0.80'"));
+        assertEquals(1, queryInt(connection,
+                "SELECT COUNT(*) FROM system_config WHERE config_key = 'mastery.score_rate.partial_min' AND config_value = '0.60'"));
+        assertEquals(1, queryInt(connection,
+                "SELECT COUNT(*) FROM system_config WHERE config_key = 'mastery.time_decay.enabled' AND config_value = 'false'"));
+        assertEquals(0, queryInt(connection, """
+                SELECT COUNT(*)
+                FROM (
+                    SELECT config_key
+                    FROM system_config
+                    GROUP BY config_key
+                    HAVING COUNT(*) > 1
+                ) duplicate_keys
+                """));
+    }
+
+    private List<String> schemaSignature(Connection connection) throws SQLException {
+        return queryStrings(connection, """
+                SELECT CONCAT_WS('|', table_name, column_name, ordinal_position, column_type,
+                                  is_nullable, COALESCE(column_default, '<NULL>'), column_key, extra)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name <> 'flyway_schema_history'
+                ORDER BY table_name, ordinal_position
+                """);
     }
 
     private void assertConstraints(Connection connection) throws SQLException {
@@ -160,6 +216,17 @@ class FlywayMigrationIntegrationTest {
                 assertTrue(resultSet.next());
                 return resultSet.getInt(1);
             }
+        }
+    }
+
+    private List<String> queryStrings(Connection connection, String sql) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(sql);
+                ResultSet resultSet = statement.executeQuery()) {
+            List<String> values = new java.util.ArrayList<>();
+            while (resultSet.next()) {
+                values.add(resultSet.getString(1));
+            }
+            return values;
         }
     }
 }

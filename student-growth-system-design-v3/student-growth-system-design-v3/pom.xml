@@ -82,6 +82,11 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
@@ -127,7 +132,7 @@
                         <phase>generate-sources</phase>
                         <goals><goal>generate</goal></goals>
                         <configuration>
-                            <inputSpec>${project.basedir}/api/openapi.yaml</inputSpec>
+                            <inputSpec>api/openapi.yaml</inputSpec>
                             <generatorName>spring</generatorName>
                             <output>${project.build.directory}/generated-sources/openapi</output>
                             <apiPackage>com.stdntedu.generated.api</apiPackage>
@@ -135,16 +140,6 @@
                             <library>spring-boot</library>
                             <generateApis>true</generateApis>
                             <generateModels>true</generateModels>
-                            <interfaceOnly>true</interfaceOnly>
-                            <useSpringBoot3>true</useSpringBoot3>
-                            <useJakartaEe>true</useJakartaEe>
-                            <useTags>true</useTags>
-                            <openApiNullable>false</openApiNullable>
-                            <dateLibrary>java8</dateLibrary>
-                            <serializableModel>true</serializableModel>
-                            <hideGenerationTimestamp>true</hideGenerationTimestamp>
-                            <documentationProvider>none</documentationProvider>
-                            <annotationLibrary>swagger2</annotationLibrary>
                             <configOptions>
                                 <interfaceOnly>true</interfaceOnly>
                                 <useSpringBoot3>true</useSpringBoot3>

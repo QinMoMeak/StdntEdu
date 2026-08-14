@@ -1,5 +1,11 @@
 # OpenAPI V3.1.3 冻结说明
 
+## Flyway V15 数据库基线修订
+
+OpenAPI 契约版本保持 V3.1.3，Mastery Algorithm 保持 V1.0。数据库基线升级至 Flyway V15，V15 仅为 `study_log` 增加 `INT NOT NULL DEFAULT 0` 的 `version` 字段，用于满足既有 `StudyLogUpdateRequest.version` 和 `StudyLogDto.version` 乐观锁契约。
+
+本次没有 API 兼容性变化，没有修改其他表、索引或算法配置。Flyway V1-V14 继续冻结，后续数据库变更必须使用新的迁移版本。
+
 ## V3.1.3 Mastery 兼容修订
 
 V3.1.3 是阶段七开始前的新契约基线。本次只修复 Mastery 输出完整性和生成接口参数完整性：
@@ -9,7 +15,7 @@ V3.1.3 是阶段七开始前的新契约基线。本次只修复 Mastery 输出�
 3. Java Spring 生成接口显式接收 `String knowledgeId`；Controller 不再从 `HttpServletRequest` 的 URI template variables 手工提取业务 path 参数。
 4. 本次没有删除接口或字段，没有修改已有字段类型、必填属性或枚举，因此属于向后兼容修订。
 
-Mastery Algorithm 仍为 V1.0，Flyway 仍为 V14，数据库和算法实现均无变化。
+V3.1.3 契约修订完成时 Mastery Algorithm 为 V1.0、Flyway 为 V14；当前数据库冻结基线已由上述 V15 修订更新，契约和算法版本均未变化。
 
 ## V3.1.2 掌握度契约修订
 
@@ -54,7 +60,7 @@ OpenAPI V3.1.3 是阶段七开始前的契约基线。后续开发必须按 `api
 
 ## 数据库边界
 
-数据库 V1 至 V13 已冻结，不得回写或重定义既有迁移的业务语义。V14 只补充算法配置数据，不修改数据库结构；后续变更必须使用新的迁移版本。
+数据库 V1 至 V14 已冻结，不得回写或重定义既有迁移的业务语义。V15 只为 `study_log` 增加乐观锁 `version` 字段，不修改其他表、字段、约束或索引；后续变更必须使用新的迁移版本。
 
 ## 安全边界
 

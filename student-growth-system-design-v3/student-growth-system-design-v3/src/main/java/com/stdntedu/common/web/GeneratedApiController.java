@@ -3,12 +3,14 @@ package com.stdntedu.common.web;
 import java.time.OffsetDateTime;
 
 import com.stdntedu.base.service.BaseDataService;
+import com.stdntedu.dashboard.service.DashboardService;
 import com.stdntedu.generated.api.DefaultApi;
 import com.stdntedu.generated.model.AcademicTermCreateRequest;
 import com.stdntedu.generated.model.AcademicTermUpdateRequest;
 import com.stdntedu.generated.model.ExamCreate;
 import com.stdntedu.generated.model.ExamType;
 import com.stdntedu.generated.model.ExamUpdate;
+import com.stdntedu.generated.model.DashboardResponse;
 import com.stdntedu.generated.model.InlineObject13;
 import com.stdntedu.generated.model.InlineObject14;
 import com.stdntedu.generated.model.InlineObject15;
@@ -91,12 +93,14 @@ public class GeneratedApiController implements DefaultApi {
     private final StudyLogService studyLogs;
     private final StudentResourceService studentResources;
     private final StudyPlanService studyPlans;
+    private final DashboardService dashboard;
     private final RequestIdProvider requestIds;
 
     public GeneratedApiController(BaseDataService baseData, StudentService students, AcademicTermService terms,
             ExamService exams, WrongQuestionService wrongQuestions, MasteryService mastery,
             LearningResourceService resources, ResourceHistoryService resourceHistory, StudyLogService studyLogs,
-            StudentResourceService studentResources, StudyPlanService studyPlans, RequestIdProvider requestIds) {
+            StudentResourceService studentResources, StudyPlanService studyPlans, DashboardService dashboard,
+            RequestIdProvider requestIds) {
         this.baseData = baseData;
         this.students = students;
         this.terms = terms;
@@ -108,6 +112,7 @@ public class GeneratedApiController implements DefaultApi {
         this.studyLogs = studyLogs;
         this.studentResources = studentResources;
         this.studyPlans = studyPlans;
+        this.dashboard = dashboard;
         this.requestIds = requestIds;
     }
 
@@ -405,6 +410,13 @@ public class GeneratedApiController implements DefaultApi {
     @Override public ResponseEntity<InlineObject2> skipStudyPlanTask(String planId, String taskId,
             SkipStudyPlanTaskRequest request) {
         return taskResponse(studyPlans.skipTask(planId, taskId, request));
+    }
+
+    @Override public ResponseEntity<DashboardResponse> getDashboard(String studentId, String academicTermId,
+            java.time.LocalDate date, String timezone) {
+        return ResponseEntity.ok(new DashboardResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(dashboard.get(studentId, academicTermId, date, timezone)));
     }
 
     private ResponseEntity<InlineObject1> planResponse(com.stdntedu.generated.model.StudyPlanDto plan) {

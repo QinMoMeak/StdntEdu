@@ -3,6 +3,7 @@ package com.stdntedu.baseline;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -138,6 +139,10 @@ class FlywayMigrationIntegrationTest {
         List<String> configKeysBeforeV17;
         List<String> schemaBeforeV17;
         Map<String, Integer> v1ToV16Checksums;
+        List<String> businessTablesBeforeV18;
+        List<String> configKeysBeforeV18;
+        List<String> schemaBeforeV18;
+        Map<String, Integer> v1ToV17Checksums;
 
         try (Connection connection = DriverManager.getConnection(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
@@ -162,17 +167,17 @@ class FlywayMigrationIntegrationTest {
             v1ToV16Checksums = appliedChecksums(v16Flyway, 16);
         }
 
-        Flyway flyway = Flyway.configure()
+        Flyway v17Flyway = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration")
+                .target(MigrationVersion.fromVersion("17"))
                 .load();
-        flyway.migrate();
+        v17Flyway.migrate();
 
         try (Connection connection = DriverManager.getConnection(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
-            assertExecutedVersions(flyway);
-            assertEquals("17", flyway.info().current().getVersion().toString());
-            assertEquals(v1ToV16Checksums, appliedChecksums(flyway, 16));
+            assertEquals("17", v17Flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV16Checksums, appliedChecksums(v17Flyway, 16));
             assertEquals(43, countBusinessTables(connection));
             assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
             assertEquals(businessTablesBeforeV17, businessTableNames(connection));
@@ -182,6 +187,35 @@ class FlywayMigrationIntegrationTest {
             assertStudyPlanTaskV17Definition(connection);
             assertSchemaFullStudyPlanTaskMatches(connection);
             assertV17MigrationCopiesMatch();
+            businessTablesBeforeV18 = businessTableNames(connection);
+            configKeysBeforeV18 = queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key");
+            schemaBeforeV18 = schemaSignature(connection);
+            v1ToV17Checksums = appliedChecksums(v17Flyway, 17);
+        }
+
+        Flyway flyway = Flyway.configure()
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .locations("classpath:db/migration")
+                .load();
+        flyway.migrate();
+
+        try (Connection connection = DriverManager.getConnection(
+                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
+            assertExecutedVersions(flyway);
+            assertEquals("18", flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV17Checksums, appliedChecksums(flyway, 17));
+            assertEquals(44, countBusinessTables(connection));
+            assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
+            assertEquals(configKeysBeforeV18,
+                    queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key"));
+            List<String> businessTablesAfterV18 = businessTableNames(connection);
+            assertEquals(businessTablesBeforeV18.size() + 1, businessTablesAfterV18.size());
+            assertTrue(businessTablesAfterV18.containsAll(businessTablesBeforeV18));
+            assertTrue(businessTablesAfterV18.contains("study_plan_action_history"));
+            assertEquals(schemaBeforeV18, schemaSignatureWithoutStudyPlanActionHistory(connection));
+            assertStudyPlanActionHistoryDefinition(connection);
+            assertSchemaFullStudyPlanActionHistoryMatches(connection);
+            assertV18MigrationCopiesMatch();
         }
     }
 
@@ -390,6 +424,7 @@ class FlywayMigrationIntegrationTest {
             Flyway flyway = Flyway.configure()
                     .dataSource(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())
                     .locations("classpath:db/migration")
+                    .target(MigrationVersion.fromVersion("17"))
                     .load();
             flyway.migrate();
 
@@ -441,7 +476,7 @@ class FlywayMigrationIntegrationTest {
                 .toList();
 
         assertEquals(
-                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17"),
+                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18"),
                 versions);
     }
 
@@ -579,6 +614,18 @@ class FlywayMigrationIntegrationTest {
                       AND column_name IN ('exam_id', 'actual_duration_seconds', 'version')
                   )
                 ORDER BY table_name, column_name
+                """);
+    }
+
+    private List<String> schemaSignatureWithoutStudyPlanActionHistory(Connection connection) throws SQLException {
+        return queryStrings(connection, """
+                SELECT CONCAT_WS('|', table_name, column_name, ordinal_position, column_type,
+                                  is_nullable, COALESCE(column_default, '<NULL>'), column_key, extra)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name <> 'flyway_schema_history'
+                  AND table_name <> 'study_plan_action_history'
+                ORDER BY table_name, ordinal_position
                 """);
     }
 
@@ -808,6 +855,176 @@ class FlywayMigrationIntegrationTest {
                         "V17__complete_study_plan_task_contract.sql")),
                 Files.readAllBytes(Path.of("src", "main", "resources", "db", "migration",
                         "V17__complete_study_plan_task_contract.sql")));
+    }
+
+    private void assertStudyPlanActionHistoryDefinition(Connection connection) throws SQLException {
+        assertEquals(List.of(
+                "id|bigint|NO|<NULL>",
+                "study_plan_id|bigint|NO|<NULL>",
+                "study_plan_task_id|bigint|YES|<NULL>",
+                "action_type|varchar(32)|NO|<NULL>",
+                "from_status|varchar(32)|NO|<NULL>",
+                "to_status|varchar(32)|NO|<NULL>",
+                "reason|varchar(512)|YES|<NULL>",
+                "note|varchar(512)|YES|<NULL>",
+                "version_before|int|NO|<NULL>",
+                "version_after|int|NO|<NULL>",
+                "create_time|datetime(3)|NO|CURRENT_TIMESTAMP(3)"),
+                queryStrings(connection, """
+                        SELECT CONCAT_WS('|', column_name, column_type, is_nullable,
+                                         COALESCE(column_default, '<NULL>'))
+                        FROM information_schema.columns
+                        WHERE table_schema = DATABASE()
+                          AND table_name = 'study_plan_action_history'
+                        ORDER BY ordinal_position
+                        """));
+
+        assertConstraint(connection, "study_plan_action_history", "fk_spah_plan", "FOREIGN KEY");
+        assertConstraint(connection, "study_plan_action_history", "fk_spah_task", "FOREIGN KEY");
+        assertConstraint(connection, "study_plan_action_history", "chk_spah_action_type", "CHECK");
+        assertConstraint(connection, "study_plan_action_history", "chk_spah_task_scope", "CHECK");
+        assertEquals(List.of("study_plan_id|study_plan", "study_plan_task_id|study_plan_task"),
+                queryStrings(connection, """
+                        SELECT CONCAT_WS('|', column_name, referenced_table_name)
+                        FROM information_schema.key_column_usage
+                        WHERE constraint_schema = DATABASE()
+                          AND table_name = 'study_plan_action_history'
+                          AND referenced_table_name IS NOT NULL
+                        ORDER BY CASE column_name
+                            WHEN 'study_plan_id' THEN 1
+                            WHEN 'study_plan_task_id' THEN 2
+                        END
+                        """));
+
+        String actionTypeCheck = queryStrings(connection, """
+                SELECT check_clause
+                FROM information_schema.check_constraints
+                WHERE constraint_schema = DATABASE()
+                  AND constraint_name = 'chk_spah_action_type'
+                """).getFirst();
+        for (String actionType : List.of(
+                "PLAN_ACTIVATE", "PLAN_PAUSE", "PLAN_COMPLETE", "PLAN_CANCEL",
+                "TASK_COMPLETE", "TASK_SKIP")) {
+            assertTrue(actionTypeCheck.contains(actionType));
+        }
+
+        String taskScopeCheck = queryStrings(connection, """
+                SELECT LOWER(check_clause)
+                FROM information_schema.check_constraints
+                WHERE constraint_schema = DATABASE()
+                  AND constraint_name = 'chk_spah_task_scope'
+                """).getFirst().replace("`", "");
+        assertTrue(taskScopeCheck.contains("study_plan_task_id is null"));
+        assertTrue(taskScopeCheck.contains("study_plan_task_id is not null"));
+        assertTrue(taskScopeCheck.contains("plan_activate"));
+        assertTrue(taskScopeCheck.contains("task_complete"));
+
+        assertEquals(List.of(
+                "idx_spah_plan_time|study_plan_id",
+                "idx_spah_plan_time|create_time",
+                "idx_spah_plan_time|id",
+                "idx_spah_task_time|study_plan_task_id",
+                "idx_spah_task_time|create_time",
+                "idx_spah_task_time|id"),
+                queryStrings(connection, """
+                        SELECT CONCAT_WS('|', index_name, column_name)
+                        FROM information_schema.statistics
+                        WHERE table_schema = DATABASE()
+                          AND table_name = 'study_plan_action_history'
+                          AND index_name IN ('idx_spah_plan_time', 'idx_spah_task_time')
+                        ORDER BY CASE index_name
+                            WHEN 'idx_spah_plan_time' THEN 1
+                            WHEN 'idx_spah_task_time' THEN 2
+                        END, seq_in_index
+                        """));
+
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate("""
+                    INSERT INTO student(id, student_code, name)
+                    VALUES (900018, 'V18-CHECK', 'V18 Constraint Student')
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO study_plan(
+                        id, student_id, title, plan_type, start_date, end_date, status
+                    ) VALUES (
+                        900018, 900018, 'V18 Constraint Plan', 'MANUAL',
+                        '2026-08-01', '2026-08-31', 'ACTIVE'
+                    )
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO study_plan_task(
+                        id, study_plan_id, task_date, task_type, title, status
+                    ) VALUES (
+                        900018, 900018, '2026-08-17', 'OTHER', 'V18 Constraint Task', 'TODO'
+                    )
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO study_plan_action_history(
+                        study_plan_id, study_plan_task_id, action_type,
+                        from_status, to_status, version_before, version_after
+                    ) VALUES (
+                        900018, NULL, 'PLAN_PAUSE', 'ACTIVE', 'PAUSED', 1, 2
+                    )
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO study_plan_action_history(
+                        study_plan_id, study_plan_task_id, action_type,
+                        from_status, to_status, reason, version_before, version_after
+                    ) VALUES (
+                        900018, 900018, 'TASK_SKIP', 'TODO', 'SKIPPED', 'not needed', 1, 2
+                    )
+                    """);
+
+            assertThrows(SQLException.class, () -> statement.executeUpdate("""
+                    INSERT INTO study_plan_action_history(
+                        study_plan_id, study_plan_task_id, action_type,
+                        from_status, to_status, version_before, version_after
+                    ) VALUES (
+                        900018, 900018, 'PLAN_CANCEL', 'ACTIVE', 'CANCELLED', 1, 2
+                    )
+                    """));
+            assertThrows(SQLException.class, () -> statement.executeUpdate("""
+                    INSERT INTO study_plan_action_history(
+                        study_plan_id, study_plan_task_id, action_type,
+                        from_status, to_status, version_before, version_after
+                    ) VALUES (
+                        900018, NULL, 'TASK_COMPLETE', 'TODO', 'COMPLETED', 1, 2
+                    )
+                    """));
+        }
+        assertEquals(2, queryInt(connection, "SELECT COUNT(*) FROM study_plan_action_history"));
+    }
+
+    private void assertSchemaFullStudyPlanActionHistoryMatches(Connection connection) throws Exception {
+        String ddl = Files.readAllLines(Path.of("database", "schema-full.sql")).stream()
+                .filter(line -> line.startsWith("CREATE TABLE study_plan_action_history("))
+                .findFirst()
+                .orElseThrow()
+                .replace("CREATE TABLE study_plan_action_history(",
+                        "CREATE TABLE study_plan_action_history_schema_full_check(")
+                .replace("CONSTRAINT fk_spah_plan", "CONSTRAINT fk_spah_check_plan")
+                .replace("CONSTRAINT fk_spah_task", "CONSTRAINT fk_spah_check_task")
+                .replace("CONSTRAINT chk_spah_action_type", "CONSTRAINT chk_spah_check_action_type")
+                .replace("CONSTRAINT chk_spah_task_scope", "CONSTRAINT chk_spah_check_task_scope")
+                .replace("INDEX idx_spah_plan_time", "INDEX idx_spah_check_plan_time")
+                .replace("INDEX idx_spah_task_time", "INDEX idx_spah_check_task_time");
+        String verificationTable = "study_plan_action_history_schema_full_check";
+
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS " + verificationTable);
+            statement.execute(ddl);
+            assertEquals(tableColumnSignature(connection, "study_plan_action_history"),
+                    tableColumnSignature(connection, verificationTable));
+            statement.execute("DROP TABLE " + verificationTable);
+        }
+    }
+
+    private void assertV18MigrationCopiesMatch() throws Exception {
+        assertArrayEquals(
+                Files.readAllBytes(Path.of("database", "flyway",
+                        "V18__create_study_plan_action_history.sql")),
+                Files.readAllBytes(Path.of("src", "main", "resources", "db", "migration",
+                        "V18__create_study_plan_action_history.sql")));
     }
 
     private List<String> studyLogColumnSignature(Connection connection, String tableName) throws SQLException {

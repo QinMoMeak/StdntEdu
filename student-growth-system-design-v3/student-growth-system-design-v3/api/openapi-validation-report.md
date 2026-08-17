@@ -1,4 +1,30 @@
-# OpenAPI V3.4.0 验证报告
+# OpenAPI V3.4.1 验证报告
+
+## V3.4.1 StudyPlan 操作历史持久化语义
+
+V3.4.1 不改变路径、operationId、请求字段结构、字段类型或状态机，只为三个既有命令字段冻结持久化语义，并将数据库基线升级为 Flyway V18：
+
+- `StudyPlanStatusChangeRequest.reason` 写入不可变 `study_plan_action_history.reason`，适用于计划激活、暂停、完成和取消，不覆盖 `study_plan.description`。
+- `SkipStudyPlanTaskRequest.reason` 写入 `TASK_SKIP` 历史的 `reason`，不覆盖 `study_plan_task.remark`。
+- `CompleteStudyPlanTaskRequest.note` 写入 `TASK_COMPLETE` 历史的 `note`，不覆盖 `study_plan_task.remark`。
+- 状态更新与历史 INSERT 必须处于同一事务；历史写入失败时状态更新回滚，stale version、非法状态机或其他失败命令不写历史。
+- `version_before` 和 `version_after` 保存成功状态变化前后的版本快照，业务实现必须保证 `version_after = version_before + 1`。
+
+V18 新增 `study_plan_action_history`，不使用 deleted 或 version，不提供修改、删除或公开查询 API。`PLAN_*` 历史要求 `study_plan_task_id IS NULL`，`TASK_*` 历史要求其非空，该规则由数据库 CHECK 固定。新表同时提供计划维度和任务维度的时间顺序索引；V1-V17 保持冻结。
+
+## V3.4.1 校验、生成与迁移结果
+
+- Swagger CLI：通过，exit 0。
+- Redocly：通过，errors 0、warnings 0。
+- `npx @openapitools/openapi-generator-cli` 在 Node 24.18.0 下仍于命令转发前退出 1；按既有治理方案使用 Java 21 和缓存的 OpenAPI Generator CLI 7.10.0 JAR完成 validate，结果通过，仅报告 4 个既有未使用 Schema 建议。
+- Java model generation 与 TypeScript Fetch generation：均通过，exit 0；Maven Spring Generator 7.10.0 生成并编译通过。
+- 结构统计：86 个路径模板、116 个操作、150 个 Schema；operationId 为 116/116/0，Path Variable 缺口为 0。本轮没有新增、删除或重命名路径、operationId 或 Schema；此前 V3.4.0 报告中的 149 个 Schema 统计已按实际解析结果校正为 150。
+- 两份 V18 SHA-256 均为 `3F2D3B19187E0801414E4C718553A32D467597FEEC1DBEA7F723C18475AC456D`，内容逐字一致。
+- Testcontainers MySQL 8 从空库成功执行 V1-V18，最终版本 v18；业务表由 43 增至 44，`system_config` 保持 31，V1-V17 已应用 checksum 与原有 43 张表的列结构均保持不变。
+- Flyway 定向测试 4/4 通过，实际验证 history 字段、两个外键、action_type CHECK、PLAN/TASK taskId CHECK、两个索引、schema-full 对齐及合法/非法行约束。
+- `mvnw.cmd clean test`：通过，tests 162、failures 0、errors 0、skipped 0。
+- `mvnw.cmd clean package`：通过，tests 162、failures 0、errors 0、skipped 0，可执行 JAR 打包成功。
+- Mastery Algorithm V1.0 与 StudentResource 回归结果不变；未修改相关算法、契约或业务源码。
 
 ## V3.4.0 StudyPlan / StudyPlanTask 契约闭环
 

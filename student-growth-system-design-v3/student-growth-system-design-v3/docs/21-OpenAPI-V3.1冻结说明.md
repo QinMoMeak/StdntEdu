@@ -1,4 +1,21 @@
-# OpenAPI V3.4.0 冻结说明
+# OpenAPI V3.4.1 冻结说明
+
+## V3.4.1 StudyPlan 操作历史与 Flyway V18
+
+V3.4.1 是阶段八 B-2 StudyPlan/StudyPlanTask 开发的新契约基线。计划与任务状态机继续沿用 V3.4.0，既有请求字段结构、类型、必填性、路径和 operationId 均不改变；本次只补齐命令字段的持久化语义。数据库基线升级为 Flyway V18，Mastery Algorithm 保持 V1.0。
+
+1. `StudyPlanStatusChangeRequest.reason` 持久化到不可变 `study_plan_action_history.reason`，适用于 `PLAN_ACTIVATE`、`PLAN_PAUSE`、`PLAN_COMPLETE`、`PLAN_CANCEL`，不得覆盖计划 `description`。
+2. `SkipStudyPlanTaskRequest.reason` 持久化为 `TASK_SKIP` 历史的 `reason`，不得覆盖任务 `remark`。
+3. `CompleteStudyPlanTaskRequest.note` 持久化为 `TASK_COMPLETE` 历史的 `note`，不得覆盖任务 `remark`。
+4. 状态更新和历史写入必须处于同一事务。历史写入失败时状态更新回滚；stale version、非法状态机和其他失败命令不得写历史。
+5. 历史记录保存真实 `from_status`、`to_status`、`version_before` 和 `version_after`；后续 Service 必须保证 `version_after = version_before + 1`。
+6. `PLAN_*` 历史不关联任务，`TASK_*` 历史必须关联任务。V18 通过 CHECK 在数据库层固定该规则，并保留 plan/task 两个维度的时间顺序索引。
+7. 普通计划/任务 create、update、delete 不写 action history；当前不新增公开历史查询 API。
+8. `generateStudyPlan` 继续延期到真实 AI 阶段，不得提供模板、随机或静默回退实现。
+
+V18 只新增 `study_plan_action_history`，不修改原有 43 张业务表和 `system_config`，不使用逻辑删除或乐观锁字段，也不允许业务 UPDATE/DELETE。V1-V17 继续冻结。
+
+V3.4.1 与 V18 已通过 Swagger、Redocly、OpenAPI Generator validate、Java/TypeScript 试生成和 Maven Spring 生成。Testcontainers MySQL 8 从空库迁移至 v18，最终为 44 张业务表、31 项 `system_config`；全量 `clean test` 和 `clean package` 均为 162 项测试通过。两份 V18 内容及 SHA-256 一致，`schema-full.sql` 与迁移后 history 表列结构一致。
 
 ## V3.4.0 StudyPlan / StudyPlanTask 契约与 Flyway V17
 
@@ -129,7 +146,7 @@ V3.1.1 是阶段四考试与成绩模块的新契约基线，在 V3.1 的基础�
 
 ## 冻结结论
 
-OpenAPI V3.3.0 是阶段八实现前的契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构或计算公式。
+OpenAPI V3.4.1 是阶段八 B-2 实现前的契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构、持久化映射或计算公式。
 
 本冻结包括统一响应模型、分页模型、错误模型、安全定义、文件上传下载约束、异步任务模型以及核心枚举。所有数据库 BIGINT ID 通过 API 返回 `string`。核心枚举编码与数据库 V1 至 V13 的 CHECK 约束保持一致。
 
@@ -147,7 +164,7 @@ OpenAPI V3.3.0 是阶段八实现前的契约基线。后续开发必须按 `api
 
 ## 数据库边界
 
-数据库 V1 至 V15 已冻结，不得回写或重定义既有迁移的业务语义。V16 只创建 `student_resource_assignment`，不修改原有业务表字段或 system_config；后续变更必须从 V17 开始使用新的迁移版本。
+数据库 V1 至 V17 已冻结，不得回写或重定义既有迁移的业务语义。V18 只创建不可变 `study_plan_action_history`，不修改原有业务表字段或 system_config；后续数据库变更必须使用新的迁移版本。
 
 ## 安全边界
 

@@ -24,11 +24,31 @@ import com.stdntedu.generated.model.InlineObject26;
 import com.stdntedu.generated.model.InlineObject27;
 import com.stdntedu.generated.model.InlineObject28;
 import com.stdntedu.generated.model.InlineObject29;
+import com.stdntedu.generated.model.InlineObject30;
+import com.stdntedu.generated.model.InlineObject31;
+import com.stdntedu.generated.model.InlineObject11;
+import com.stdntedu.generated.model.InlineObject12;
 import com.stdntedu.generated.model.ReviewCreate;
 import com.stdntedu.generated.model.MasteryAdjustRequest;
+import com.stdntedu.generated.model.ResourceCreate;
+import com.stdntedu.generated.model.ResourceHistoryCreateRequest;
+import com.stdntedu.generated.model.ResourceHistoryPageResponse;
+import com.stdntedu.generated.model.ResourceUpdate;
 import com.stdntedu.generated.model.ScorePageResponse;
 import com.stdntedu.generated.model.ScoreTrendResponse;
 import com.stdntedu.generated.model.ScorePageResponseAllOfData;
+import com.stdntedu.generated.model.StudyLogCreateRequest;
+import com.stdntedu.generated.model.StudyLogPageResponse;
+import com.stdntedu.generated.model.StudyLogUpdateRequest;
+import com.stdntedu.generated.model.StudentResourceCreateRequest;
+import com.stdntedu.generated.model.StudentResourcePageResponse;
+import com.stdntedu.generated.model.StudentResourceResponse;
+import com.stdntedu.generated.model.StudentResourceStatus;
+import com.stdntedu.generated.model.StudentResourceUpdateRequest;
+import com.stdntedu.resource.service.LearningResourceService;
+import com.stdntedu.resource.service.ResourceHistoryService;
+import com.stdntedu.resource.service.StudyLogService;
+import com.stdntedu.resource.service.StudentResourceService;
 import com.stdntedu.score.service.ExamService;
 import com.stdntedu.knowledge.mastery.service.MasteryService;
 import com.stdntedu.generated.model.StudentCreate;
@@ -51,17 +71,26 @@ public class GeneratedApiController implements DefaultApi {
     private final ExamService exams;
     private final WrongQuestionService wrongQuestions;
     private final MasteryService mastery;
+    private final LearningResourceService resources;
+    private final ResourceHistoryService resourceHistory;
+    private final StudyLogService studyLogs;
+    private final StudentResourceService studentResources;
     private final RequestIdProvider requestIds;
 
     public GeneratedApiController(BaseDataService baseData, StudentService students, AcademicTermService terms,
             ExamService exams, WrongQuestionService wrongQuestions, MasteryService mastery,
-            RequestIdProvider requestIds) {
+            LearningResourceService resources, ResourceHistoryService resourceHistory, StudyLogService studyLogs,
+            StudentResourceService studentResources, RequestIdProvider requestIds) {
         this.baseData = baseData;
         this.students = students;
         this.terms = terms;
         this.exams = exams;
         this.wrongQuestions = wrongQuestions;
         this.mastery = mastery;
+        this.resources = resources;
+        this.resourceHistory = resourceHistory;
+        this.studyLogs = studyLogs;
+        this.studentResources = studentResources;
         this.requestIds = requestIds;
     }
 
@@ -186,6 +215,101 @@ public class GeneratedApiController implements DefaultApi {
             Object body) {
         return ResponseEntity.ok(new InlineObject23().code("OK").message("success").requestId(requestIds.current())
                 .timestamp(OffsetDateTime.now()).data(mastery.unlock(studentId, knowledgeId)));
+    }
+
+    @Override public ResponseEntity<InlineObject30> listResources(Integer page, Integer pageSize) {
+        return ResponseEntity.ok(new InlineObject30().code("OK").message("success").requestId(requestIds.current())
+                .timestamp(OffsetDateTime.now()).data(resources.list(page, pageSize)));
+    }
+
+    @Override public ResponseEntity<InlineObject31> createResource(ResourceCreate request) {
+        return ResponseEntity.status(201).body(new InlineObject31().code("CREATED").message("created")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(resources.create(request)));
+    }
+
+    @Override public ResponseEntity<InlineObject31> getResource(String resourceId) {
+        return ResponseEntity.ok(new InlineObject31().code("OK").message("success").requestId(requestIds.current())
+                .timestamp(OffsetDateTime.now()).data(resources.get(resourceId)));
+    }
+
+    @Override public ResponseEntity<InlineObject31> updateResource(String resourceId, ResourceUpdate request) {
+        return ResponseEntity.ok(new InlineObject31().code("OK").message("success").requestId(requestIds.current())
+                .timestamp(OffsetDateTime.now()).data(resources.update(resourceId, request)));
+    }
+
+    @Override public ResponseEntity<StudentResourcePageResponse> listStudentResources(String studentId,
+            StudentResourceStatus status, String subjectId, Integer page, Integer pageSize) {
+        return ResponseEntity.ok(new StudentResourcePageResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(studentResources.list(studentId, status, subjectId, page, pageSize)));
+    }
+
+    @Override public ResponseEntity<StudentResourceResponse> createStudentResource(
+            StudentResourceCreateRequest request) {
+        return ResponseEntity.status(201).body(new StudentResourceResponse().code("CREATED").message("created")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(studentResources.create(request)));
+    }
+
+    @Override public ResponseEntity<StudentResourceResponse> getStudentResource(String assignmentId) {
+        return ResponseEntity.ok(new StudentResourceResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(studentResources.get(assignmentId)));
+    }
+
+    @Override public ResponseEntity<StudentResourceResponse> updateStudentResource(String assignmentId,
+            StudentResourceUpdateRequest request) {
+        return ResponseEntity.ok(new StudentResourceResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(studentResources.update(assignmentId, request)));
+    }
+
+    @Override public ResponseEntity<InlineObject11> createResourceHistory(String resourceId,
+            ResourceHistoryCreateRequest request) {
+        return ResponseEntity.status(201).body(new InlineObject11().code("CREATED").message("created")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(resourceHistory.create(resourceId, request)));
+    }
+
+    @Override public ResponseEntity<ResourceHistoryPageResponse> listResourceHistory(String resourceId,
+            String studentId, Integer page, Integer pageSize) {
+        return ResponseEntity.ok(new ResourceHistoryPageResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(resourceHistory.listForResource(resourceId, studentId, page, pageSize)));
+    }
+
+    @Override public ResponseEntity<ResourceHistoryPageResponse> listStudentResourceHistory(String studentId,
+            String subjectId, String resourceType, String sourceType, Boolean completed, java.time.LocalDate startDate,
+            java.time.LocalDate endDate, Integer page, Integer pageSize) {
+        return ResponseEntity.ok(new ResourceHistoryPageResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(resourceHistory.listForStudent(studentId, subjectId, resourceType, sourceType, completed,
+                        startDate, endDate, page, pageSize)));
+    }
+
+    @Override public ResponseEntity<StudyLogPageResponse> listStudyLogs(String studentId, String subjectId,
+            java.time.LocalDate startDate, java.time.LocalDate endDate, String keyword, Integer page, Integer pageSize) {
+        return ResponseEntity.ok(new StudyLogPageResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(studyLogs.list(studentId, subjectId, startDate, endDate, keyword, page, pageSize)));
+    }
+
+    @Override public ResponseEntity<InlineObject12> createStudyLog(StudyLogCreateRequest request) {
+        return ResponseEntity.status(201).body(new InlineObject12().code("CREATED").message("created")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(studyLogs.create(request)));
+    }
+
+    @Override public ResponseEntity<InlineObject12> getStudyLog(String studyLogId) {
+        return ResponseEntity.ok(new InlineObject12().code("OK").message("success").requestId(requestIds.current())
+                .timestamp(OffsetDateTime.now()).data(studyLogs.get(studyLogId)));
+    }
+
+    @Override public ResponseEntity<InlineObject12> updateStudyLog(String studyLogId, StudyLogUpdateRequest request) {
+        return ResponseEntity.ok(new InlineObject12().code("OK").message("success").requestId(requestIds.current())
+                .timestamp(OffsetDateTime.now()).data(studyLogs.update(studyLogId, request)));
+    }
+
+    @Override public ResponseEntity<Void> deleteStudyLog(String studyLogId) {
+        studyLogs.delete(studyLogId);
+        return ResponseEntity.noContent().build();
     }
 
 }

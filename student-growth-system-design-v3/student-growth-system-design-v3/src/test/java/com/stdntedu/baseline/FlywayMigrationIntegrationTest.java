@@ -1,5 +1,6 @@
 package com.stdntedu.baseline;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -88,17 +89,22 @@ class FlywayMigrationIntegrationTest {
             assertFalse(studyLogColumnsBeforeV15.contains("version"));
         }
 
-        Flyway flyway = Flyway.configure()
+        Flyway v15Flyway = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration")
+                .target(MigrationVersion.fromVersion("15"))
                 .load();
 
-        flyway.migrate();
+        v15Flyway.migrate();
+
+        List<String> businessTablesBeforeV16;
+        List<String> configKeysBeforeV16;
+        List<String> schemaBeforeV16;
+        Map<String, Integer> v1ToV15Checksums;
 
         try (Connection connection = DriverManager.getConnection(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
-            assertExecutedVersions(flyway);
-            assertEquals("15", flyway.info().current().getVersion().toString());
+            assertEquals("15", v15Flyway.info().current().getVersion().toString());
             assertEquals(42, countBusinessTables(connection));
             assertBasicData(connection);
             assertDictionaryData(connection);
@@ -114,6 +120,68 @@ class FlywayMigrationIntegrationTest {
             assertStudyLogVersionDefinition(connection);
             assertSchemaFullStudyLogMatches(connection);
             assertConstraints(connection);
+            businessTablesBeforeV16 = businessTableNames(connection);
+            configKeysBeforeV16 = queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key");
+            schemaBeforeV16 = schemaSignature(connection);
+            v1ToV15Checksums = appliedChecksums(v15Flyway, 15);
+        }
+
+        Flyway v16Flyway = Flyway.configure()
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .locations("classpath:db/migration")
+                .target(MigrationVersion.fromVersion("16"))
+                .load();
+
+        v16Flyway.migrate();
+
+        List<String> businessTablesBeforeV17;
+        List<String> configKeysBeforeV17;
+        List<String> schemaBeforeV17;
+        Map<String, Integer> v1ToV16Checksums;
+
+        try (Connection connection = DriverManager.getConnection(
+                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
+            assertEquals("16", v16Flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV15Checksums, appliedChecksums(v16Flyway, 15));
+            assertEquals(43, countBusinessTables(connection));
+            assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
+            assertEquals(configKeysBeforeV16,
+                    queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key"));
+            List<String> businessTablesAfterV16 = businessTableNames(connection);
+            assertEquals(businessTablesBeforeV16.size() + 1, businessTablesAfterV16.size());
+            assertTrue(businessTablesAfterV16.containsAll(businessTablesBeforeV16));
+            assertTrue(businessTablesAfterV16.contains("student_resource_assignment"));
+            assertEquals(schemaBeforeV16, schemaSignatureWithoutStudentResourceAssignment(connection));
+            assertStudentResourceAssignmentDefinition(connection);
+            assertSchemaFullStudentResourceAssignmentMatches(connection);
+            assertV16MigrationCopiesMatch();
+            assertEquals(0, countInvalidStudyPlanTaskTypes(connection));
+            businessTablesBeforeV17 = businessTableNames(connection);
+            configKeysBeforeV17 = queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key");
+            schemaBeforeV17 = schemaSignatureWithoutStudyPlanTaskV17Columns(connection);
+            v1ToV16Checksums = appliedChecksums(v16Flyway, 16);
+        }
+
+        Flyway flyway = Flyway.configure()
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .locations("classpath:db/migration")
+                .load();
+        flyway.migrate();
+
+        try (Connection connection = DriverManager.getConnection(
+                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
+            assertExecutedVersions(flyway);
+            assertEquals("17", flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV16Checksums, appliedChecksums(flyway, 16));
+            assertEquals(43, countBusinessTables(connection));
+            assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
+            assertEquals(businessTablesBeforeV17, businessTableNames(connection));
+            assertEquals(configKeysBeforeV17,
+                    queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key"));
+            assertEquals(schemaBeforeV17, schemaSignatureWithoutStudyPlanTaskV17Columns(connection));
+            assertStudyPlanTaskV17Definition(connection);
+            assertSchemaFullStudyPlanTaskMatches(connection);
+            assertV17MigrationCopiesMatch();
         }
     }
 
@@ -164,6 +232,7 @@ class FlywayMigrationIntegrationTest {
             Flyway flyway = Flyway.configure()
                     .dataSource(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())
                     .locations("classpath:db/migration")
+                    .target(MigrationVersion.fromVersion("15"))
                     .load();
             flyway.migrate();
 
@@ -199,6 +268,172 @@ class FlywayMigrationIntegrationTest {
         }
     }
 
+    @Test
+    void createsStudentResourceAssignmentFromFrozenV15Baseline() throws Exception {
+        try (MySQLContainer<?> mysql = new MySQLContainer<>(mysqlImage())
+                .withDatabaseName("student_growth")
+                .withUsername("student_growth")
+                .withPassword("student_growth")) {
+            mysql.start();
+
+            Flyway v15Flyway = Flyway.configure()
+                    .dataSource(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())
+                    .locations("classpath:db/migration")
+                    .target(MigrationVersion.fromVersion("15"))
+                    .load();
+            v15Flyway.migrate();
+
+            Map<String, Integer> v1ToV15Checksums = appliedChecksums(v15Flyway, 15);
+            List<String> schemaBeforeV16;
+            List<String> businessTablesBeforeV16;
+            List<String> configKeysBeforeV16;
+            try (Connection connection = DriverManager.getConnection(
+                    mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())) {
+                assertEquals(42, countBusinessTables(connection));
+                assertEquals(0, queryInt(connection, """
+                        SELECT COUNT(*)
+                        FROM information_schema.tables
+                        WHERE table_schema = DATABASE()
+                          AND table_name = 'student_resource_assignment'
+                        """));
+                schemaBeforeV16 = schemaSignature(connection);
+                businessTablesBeforeV16 = businessTableNames(connection);
+                configKeysBeforeV16 = queryStrings(connection,
+                        "SELECT config_key FROM system_config ORDER BY config_key");
+            }
+
+            Flyway flyway = Flyway.configure()
+                    .dataSource(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())
+                    .locations("classpath:db/migration")
+                    .target(MigrationVersion.fromVersion("16"))
+                    .load();
+            flyway.migrate();
+
+            try (Connection connection = DriverManager.getConnection(
+                    mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())) {
+                assertEquals("16", flyway.info().current().getVersion().toString());
+                assertEquals(v1ToV15Checksums, appliedChecksums(flyway, 15));
+                assertEquals(43, countBusinessTables(connection));
+                assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
+                assertEquals(configKeysBeforeV16,
+                        queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key"));
+                List<String> businessTablesAfterV16 = businessTableNames(connection);
+                assertEquals(businessTablesBeforeV16.size() + 1, businessTablesAfterV16.size());
+                assertTrue(businessTablesAfterV16.containsAll(businessTablesBeforeV16));
+                assertEquals(schemaBeforeV16, schemaSignatureWithoutStudentResourceAssignment(connection));
+                assertStudentResourceAssignmentDefinition(connection);
+                assertSchemaFullStudentResourceAssignmentMatches(connection);
+                assertV16MigrationCopiesMatch();
+            }
+        }
+    }
+
+    @Test
+    void preservesExistingStudyPlanTaskWhenMigratingFromV16() throws Exception {
+        try (MySQLContainer<?> mysql = new MySQLContainer<>(mysqlImage())
+                .withDatabaseName("student_growth")
+                .withUsername("student_growth")
+                .withPassword("student_growth")) {
+            mysql.start();
+
+            Flyway v16Flyway = Flyway.configure()
+                    .dataSource(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())
+                    .locations("classpath:db/migration")
+                    .target(MigrationVersion.fromVersion("16"))
+                    .load();
+            v16Flyway.migrate();
+
+            Map<String, Integer> v1ToV16Checksums = appliedChecksums(v16Flyway, 16);
+            List<String> businessTablesBeforeV17;
+            List<String> configKeysBeforeV17;
+            List<String> schemaBeforeV17;
+            try (Connection connection = DriverManager.getConnection(
+                    mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())) {
+                try (Statement statement = connection.createStatement()) {
+                    statement.executeUpdate("""
+                            INSERT INTO student(id, student_code, name)
+                            VALUES (900002, 'V17-COMPAT', 'V17 Compatibility Student')
+                            """);
+                    statement.executeUpdate("""
+                            INSERT INTO study_plan(
+                                id, student_id, title, plan_type, start_date, end_date,
+                                status, daily_available_minutes, description, deleted, version,
+                                create_time, update_time
+                            ) VALUES (
+                                900002, 900002, 'Legacy V16 plan', 'MANUAL',
+                                '2026-08-01', '2026-08-31', 'DRAFT', 45,
+                                'legacy plan', 0, 1,
+                                '2026-08-16 08:00:00.000', '2026-08-16 08:00:00.000'
+                            )
+                            """);
+                    statement.executeUpdate("""
+                            INSERT INTO study_plan_task(
+                                id, study_plan_id, task_date, task_type, title,
+                                resource_id, wrong_question_id, knowledge_id,
+                                expected_duration_seconds, status, completed_time,
+                                sort_order, remark, create_time, update_time
+                            ) VALUES (
+                                900002, 900002, '2026-08-17', 'OTHER', 'Legacy V16 task',
+                                NULL, NULL, NULL, 1800, 'TODO', NULL,
+                                3, 'legacy task',
+                                '2026-08-16 08:30:00.000', '2026-08-16 08:30:00.000'
+                            )
+                            """);
+                }
+                assertEquals(0, countInvalidStudyPlanTaskTypes(connection));
+                businessTablesBeforeV17 = businessTableNames(connection);
+                configKeysBeforeV17 = queryStrings(connection,
+                        "SELECT config_key FROM system_config ORDER BY config_key");
+                schemaBeforeV17 = schemaSignatureWithoutStudyPlanTaskV17Columns(connection);
+            }
+
+            Flyway flyway = Flyway.configure()
+                    .dataSource(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())
+                    .locations("classpath:db/migration")
+                    .load();
+            flyway.migrate();
+
+            try (Connection connection = DriverManager.getConnection(
+                    mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())) {
+                assertEquals("17", flyway.info().current().getVersion().toString());
+                assertEquals(v1ToV16Checksums, appliedChecksums(flyway, 16));
+                assertEquals(43, countBusinessTables(connection));
+                assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
+                assertEquals(businessTablesBeforeV17, businessTableNames(connection));
+                assertEquals(configKeysBeforeV17,
+                        queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key"));
+                assertEquals(schemaBeforeV17, schemaSignatureWithoutStudyPlanTaskV17Columns(connection));
+                assertEquals(1, queryInt(connection, """
+                        SELECT COUNT(*)
+                        FROM study_plan_task
+                        WHERE id = 900002
+                          AND study_plan_id = 900002
+                          AND task_date = '2026-08-17'
+                          AND task_type = 'OTHER'
+                          AND title = 'Legacy V16 task'
+                          AND resource_id IS NULL
+                          AND wrong_question_id IS NULL
+                          AND knowledge_id IS NULL
+                          AND exam_id IS NULL
+                          AND expected_duration_seconds = 1800
+                          AND actual_duration_seconds IS NULL
+                          AND status = 'TODO'
+                          AND completed_time IS NULL
+                          AND sort_order = 3
+                          AND remark = 'legacy task'
+                          AND version = 1
+                          AND create_time = '2026-08-16 08:30:00.000'
+                          AND update_time = '2026-08-16 08:30:00.000'
+                        """));
+                assertEquals(0, queryInt(connection,
+                        "SELECT COUNT(*) FROM study_plan_task WHERE id = 900002 AND version IS NULL"));
+                assertStudyPlanTaskV17Definition(connection);
+                assertSchemaFullStudyPlanTaskMatches(connection);
+                assertV17MigrationCopiesMatch();
+            }
+        }
+    }
+
     private void assertExecutedVersions(Flyway flyway) {
         List<String> versions = Arrays.stream(flyway.info().applied())
                 .map(MigrationInfo::getVersion)
@@ -206,7 +441,7 @@ class FlywayMigrationIntegrationTest {
                 .toList();
 
         assertEquals(
-                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"),
+                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17"),
                 versions);
     }
 
@@ -320,6 +555,33 @@ class FlywayMigrationIntegrationTest {
                 """);
     }
 
+    private List<String> schemaSignatureWithoutStudentResourceAssignment(Connection connection) throws SQLException {
+        return queryStrings(connection, """
+                SELECT CONCAT_WS('|', table_name, column_name, ordinal_position, column_type,
+                                  is_nullable, COALESCE(column_default, '<NULL>'), column_key, extra)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name <> 'flyway_schema_history'
+                  AND table_name <> 'student_resource_assignment'
+                ORDER BY table_name, ordinal_position
+                """);
+    }
+
+    private List<String> schemaSignatureWithoutStudyPlanTaskV17Columns(Connection connection) throws SQLException {
+        return queryStrings(connection, """
+                SELECT CONCAT_WS('|', table_name, column_name, column_type,
+                                  is_nullable, COALESCE(column_default, '<NULL>'), column_key, extra)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name <> 'flyway_schema_history'
+                  AND NOT (
+                      table_name = 'study_plan_task'
+                      AND column_name IN ('exam_id', 'actual_duration_seconds', 'version')
+                  )
+                ORDER BY table_name, column_name
+                """);
+    }
+
     private List<String> studyLogColumnNames(Connection connection) throws SQLException {
         return queryStrings(connection, """
                 SELECT column_name
@@ -371,7 +633,188 @@ class FlywayMigrationIntegrationTest {
         }
     }
 
+    private void assertStudentResourceAssignmentDefinition(Connection connection) throws SQLException {
+        assertEquals(List.of(
+                "id|bigint|NO|<NULL>",
+                "student_id|bigint|NO|<NULL>",
+                "resource_id|bigint|NO|<NULL>",
+                "status|varchar(32)|NO|WAITING",
+                "assigned_time|datetime(3)|NO|CURRENT_TIMESTAMP(3)",
+                "remark|varchar(512)|YES|<NULL>",
+                "version|int|NO|0",
+                "create_time|datetime(3)|NO|CURRENT_TIMESTAMP(3)",
+                "update_time|datetime(3)|NO|CURRENT_TIMESTAMP(3)"),
+                queryStrings(connection, """
+                        SELECT CONCAT_WS('|', column_name, column_type, is_nullable,
+                                         COALESCE(column_default, '<NULL>'))
+                        FROM information_schema.columns
+                        WHERE table_schema = DATABASE()
+                          AND table_name = 'student_resource_assignment'
+                        ORDER BY ordinal_position
+                        """));
+
+        assertConstraint(connection, "student_resource_assignment", "uk_sra_student_resource", "UNIQUE");
+        assertConstraint(connection, "student_resource_assignment", "fk_sra_student", "FOREIGN KEY");
+        assertConstraint(connection, "student_resource_assignment", "fk_sra_resource", "FOREIGN KEY");
+        assertConstraint(connection, "student_resource_assignment", "chk_sra_status", "CHECK");
+        assertEquals(List.of("student_id|student", "resource_id|learning_resource"),
+                queryStrings(connection, """
+                        SELECT CONCAT_WS('|', column_name, referenced_table_name)
+                        FROM information_schema.key_column_usage
+                        WHERE constraint_schema = DATABASE()
+                          AND table_name = 'student_resource_assignment'
+                          AND referenced_table_name IS NOT NULL
+                        ORDER BY CASE column_name WHEN 'student_id' THEN 1 WHEN 'resource_id' THEN 2 END
+                        """));
+        assertEquals(List.of("student_id", "resource_id"), queryStrings(connection, """
+                SELECT column_name
+                FROM information_schema.statistics
+                WHERE table_schema = DATABASE()
+                  AND table_name = 'student_resource_assignment'
+                  AND index_name = 'uk_sra_student_resource'
+                  AND non_unique = 0
+                ORDER BY seq_in_index
+                """));
+        String statusCheck = queryStrings(connection, """
+                SELECT check_clause
+                FROM information_schema.check_constraints
+                WHERE constraint_schema = DATABASE()
+                  AND constraint_name = 'chk_sra_status'
+                """).getFirst();
+        for (String status : List.of("WAITING", "LEARNING", "COMPLETED", "REVIEW", "ARCHIVED")) {
+            assertTrue(statusCheck.contains(status));
+        }
+    }
+
+    private void assertSchemaFullStudentResourceAssignmentMatches(Connection connection) throws Exception {
+        String ddl = Files.readAllLines(Path.of("database", "schema-full.sql")).stream()
+                .filter(line -> line.startsWith("CREATE TABLE student_resource_assignment("))
+                .findFirst()
+                .orElseThrow()
+                .replace("CREATE TABLE student_resource_assignment(",
+                        "CREATE TABLE student_resource_assignment_schema_full_check(")
+                .replace("CONSTRAINT fk_sra_student", "CONSTRAINT fk_sra_check_student")
+                .replace("CONSTRAINT fk_sra_resource", "CONSTRAINT fk_sra_check_resource")
+                .replace("CONSTRAINT uk_sra_student_resource", "CONSTRAINT uk_sra_check_student_resource")
+                .replace("CONSTRAINT chk_sra_status", "CONSTRAINT chk_sra_check_status")
+                .replace("INDEX idx_sra_student_status", "INDEX idx_sra_check_student_status");
+        String verificationTable = "student_resource_assignment_schema_full_check";
+
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS " + verificationTable);
+            statement.execute(ddl);
+            assertEquals(tableColumnSignature(connection, "student_resource_assignment"),
+                    tableColumnSignature(connection, verificationTable));
+            statement.execute("DROP TABLE " + verificationTable);
+        }
+    }
+
+    private void assertV16MigrationCopiesMatch() throws Exception {
+        assertArrayEquals(
+                Files.readAllBytes(Path.of("database", "flyway", "V16__create_student_resource_assignment.sql")),
+                Files.readAllBytes(Path.of("src", "main", "resources", "db", "migration",
+                        "V16__create_student_resource_assignment.sql")));
+    }
+
+    private int countInvalidStudyPlanTaskTypes(Connection connection) throws SQLException {
+        return queryInt(connection, """
+                SELECT COUNT(*)
+                FROM study_plan_task
+                WHERE task_type NOT IN (
+                    'WRONG_QUESTION_REVIEW',
+                    'RESOURCE_LEARNING',
+                    'KNOWLEDGE_PRACTICE',
+                    'EXAM_REVIEW',
+                    'READING',
+                    'OTHER'
+                )
+                """);
+    }
+
+    private void assertStudyPlanTaskV17Definition(Connection connection) throws SQLException {
+        assertEquals(List.of(
+                "exam_id|bigint|YES|<NULL>",
+                "actual_duration_seconds|int|YES|<NULL>",
+                "version|int|NO|1"),
+                queryStrings(connection, """
+                        SELECT CONCAT_WS('|', column_name, column_type, is_nullable,
+                                         COALESCE(column_default, '<NULL>'))
+                        FROM information_schema.columns
+                        WHERE table_schema = DATABASE()
+                          AND table_name = 'study_plan_task'
+                          AND column_name IN ('exam_id', 'actual_duration_seconds', 'version')
+                        ORDER BY FIELD(column_name, 'exam_id', 'actual_duration_seconds', 'version')
+                        """));
+
+        assertConstraint(connection, "study_plan_task", "fk_spt_exam", "FOREIGN KEY");
+        assertConstraint(connection, "study_plan_task", "chk_spt_actual_duration", "CHECK");
+        assertConstraint(connection, "study_plan_task", "chk_spt_task_type", "CHECK");
+        assertEquals(List.of("exam_id|exam"), queryStrings(connection, """
+                SELECT CONCAT_WS('|', column_name, referenced_table_name)
+                FROM information_schema.key_column_usage
+                WHERE constraint_schema = DATABASE()
+                  AND table_name = 'study_plan_task'
+                  AND constraint_name = 'fk_spt_exam'
+                """));
+
+        String actualDurationCheck = queryStrings(connection, """
+                SELECT check_clause
+                FROM information_schema.check_constraints
+                WHERE constraint_schema = DATABASE()
+                  AND constraint_name = 'chk_spt_actual_duration'
+                """).getFirst();
+        assertTrue(actualDurationCheck.contains("actual_duration_seconds"));
+        assertTrue(actualDurationCheck.contains(">= 0"));
+
+        String taskTypeCheck = queryStrings(connection, """
+                SELECT check_clause
+                FROM information_schema.check_constraints
+                WHERE constraint_schema = DATABASE()
+                  AND constraint_name = 'chk_spt_task_type'
+                """).getFirst();
+        for (String taskType : List.of(
+                "WRONG_QUESTION_REVIEW", "RESOURCE_LEARNING", "KNOWLEDGE_PRACTICE",
+                "EXAM_REVIEW", "READING", "OTHER")) {
+            assertTrue(taskTypeCheck.contains(taskType));
+        }
+    }
+
+    private void assertSchemaFullStudyPlanTaskMatches(Connection connection) throws Exception {
+        String ddl = Files.readAllLines(Path.of("database", "schema-full.sql")).stream()
+                .filter(line -> line.startsWith("CREATE TABLE study_plan_task("))
+                .findFirst()
+                .orElseThrow()
+                .replace("CREATE TABLE study_plan_task(",
+                        "CREATE TABLE study_plan_task_schema_full_check(")
+                .replace("CONSTRAINT fk_spt_plan", "CONSTRAINT fk_spt_check_plan")
+                .replace("CONSTRAINT fk_spt_resource", "CONSTRAINT fk_spt_check_resource")
+                .replace("CONSTRAINT fk_spt_wq", "CONSTRAINT fk_spt_check_wq")
+                .replace("CONSTRAINT fk_spt_kn", "CONSTRAINT fk_spt_check_kn")
+                .replace("CONSTRAINT fk_spt_exam", "CONSTRAINT fk_spt_check_exam");
+        String verificationTable = "study_plan_task_schema_full_check";
+
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS " + verificationTable);
+            statement.execute(ddl);
+            assertEquals(tableColumnSignature(connection, "study_plan_task"),
+                    tableColumnSignature(connection, verificationTable));
+            statement.execute("DROP TABLE " + verificationTable);
+        }
+    }
+
+    private void assertV17MigrationCopiesMatch() throws Exception {
+        assertArrayEquals(
+                Files.readAllBytes(Path.of("database", "flyway",
+                        "V17__complete_study_plan_task_contract.sql")),
+                Files.readAllBytes(Path.of("src", "main", "resources", "db", "migration",
+                        "V17__complete_study_plan_task_contract.sql")));
+    }
+
     private List<String> studyLogColumnSignature(Connection connection, String tableName) throws SQLException {
+        return tableColumnSignature(connection, tableName);
+    }
+
+    private List<String> tableColumnSignature(Connection connection, String tableName) throws SQLException {
         return queryStrings(connection, """
                 SELECT CONCAT_WS('|', column_name, ordinal_position, column_type,
                                   is_nullable, COALESCE(column_default, '<NULL>'), extra)

@@ -15,6 +15,8 @@ import com.stdntedu.generated.model.InlineObject15;
 import com.stdntedu.generated.model.InlineObject16;
 import com.stdntedu.generated.model.InlineObject17;
 import com.stdntedu.generated.model.InlineObject18;
+import com.stdntedu.generated.model.InlineObject1;
+import com.stdntedu.generated.model.InlineObject2;
 import com.stdntedu.generated.model.InlineObject21;
 import com.stdntedu.generated.model.InlineObject22;
 import com.stdntedu.generated.model.InlineObject23;
@@ -45,10 +47,23 @@ import com.stdntedu.generated.model.StudentResourcePageResponse;
 import com.stdntedu.generated.model.StudentResourceResponse;
 import com.stdntedu.generated.model.StudentResourceStatus;
 import com.stdntedu.generated.model.StudentResourceUpdateRequest;
+import com.stdntedu.generated.model.CompleteStudyPlanTaskRequest;
+import com.stdntedu.generated.model.SkipStudyPlanTaskRequest;
+import com.stdntedu.generated.model.StudyPlanCreateRequest;
+import com.stdntedu.generated.model.StudyPlanPageResponse;
+import com.stdntedu.generated.model.StudyPlanStatus;
+import com.stdntedu.generated.model.StudyPlanStatusChangeRequest;
+import com.stdntedu.generated.model.StudyPlanTaskCreateRequest;
+import com.stdntedu.generated.model.StudyPlanTaskPageResponse;
+import com.stdntedu.generated.model.StudyPlanTaskStatus;
+import com.stdntedu.generated.model.StudyPlanTaskType;
+import com.stdntedu.generated.model.StudyPlanTaskUpdateRequest;
+import com.stdntedu.generated.model.StudyPlanUpdateRequest;
 import com.stdntedu.resource.service.LearningResourceService;
 import com.stdntedu.resource.service.ResourceHistoryService;
 import com.stdntedu.resource.service.StudyLogService;
 import com.stdntedu.resource.service.StudentResourceService;
+import com.stdntedu.studyplan.service.StudyPlanService;
 import com.stdntedu.score.service.ExamService;
 import com.stdntedu.knowledge.mastery.service.MasteryService;
 import com.stdntedu.generated.model.StudentCreate;
@@ -75,12 +90,13 @@ public class GeneratedApiController implements DefaultApi {
     private final ResourceHistoryService resourceHistory;
     private final StudyLogService studyLogs;
     private final StudentResourceService studentResources;
+    private final StudyPlanService studyPlans;
     private final RequestIdProvider requestIds;
 
     public GeneratedApiController(BaseDataService baseData, StudentService students, AcademicTermService terms,
             ExamService exams, WrongQuestionService wrongQuestions, MasteryService mastery,
             LearningResourceService resources, ResourceHistoryService resourceHistory, StudyLogService studyLogs,
-            StudentResourceService studentResources, RequestIdProvider requestIds) {
+            StudentResourceService studentResources, StudyPlanService studyPlans, RequestIdProvider requestIds) {
         this.baseData = baseData;
         this.students = students;
         this.terms = terms;
@@ -91,6 +107,7 @@ public class GeneratedApiController implements DefaultApi {
         this.resourceHistory = resourceHistory;
         this.studyLogs = studyLogs;
         this.studentResources = studentResources;
+        this.studyPlans = studyPlans;
         this.requestIds = requestIds;
     }
 
@@ -310,6 +327,94 @@ public class GeneratedApiController implements DefaultApi {
     @Override public ResponseEntity<Void> deleteStudyLog(String studyLogId) {
         studyLogs.delete(studyLogId);
         return ResponseEntity.noContent().build();
+    }
+
+    @Override public ResponseEntity<StudyPlanPageResponse> listStudyPlans(String studentId, StudyPlanStatus status,
+            String planType, java.time.LocalDate startDate, java.time.LocalDate endDate, Integer page,
+            Integer pageSize) {
+        return ResponseEntity.ok(new StudyPlanPageResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(studyPlans.list(studentId, status, planType, startDate, endDate, page, pageSize)));
+    }
+
+    @Override public ResponseEntity<InlineObject1> createStudyPlan(StudyPlanCreateRequest request) {
+        return ResponseEntity.status(201).body(new InlineObject1().code("CREATED").message("created")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(studyPlans.create(request)));
+    }
+
+    @Override public ResponseEntity<InlineObject1> getStudyPlan(String planId) {
+        return ResponseEntity.ok(new InlineObject1().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(studyPlans.get(planId)));
+    }
+
+    @Override public ResponseEntity<InlineObject1> updateStudyPlan(String planId, StudyPlanUpdateRequest request) {
+        return ResponseEntity.ok(new InlineObject1().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(studyPlans.update(planId, request)));
+    }
+
+    @Override public ResponseEntity<Void> deleteStudyPlan(String planId) {
+        studyPlans.delete(planId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override public ResponseEntity<InlineObject1> activateStudyPlan(String planId,
+            StudyPlanStatusChangeRequest request) {
+        return planResponse(studyPlans.activate(planId, request));
+    }
+
+    @Override public ResponseEntity<InlineObject1> pauseStudyPlan(String planId,
+            StudyPlanStatusChangeRequest request) {
+        return planResponse(studyPlans.pause(planId, request));
+    }
+
+    @Override public ResponseEntity<InlineObject1> completeStudyPlan(String planId,
+            StudyPlanStatusChangeRequest request) {
+        return planResponse(studyPlans.complete(planId, request));
+    }
+
+    @Override public ResponseEntity<InlineObject1> cancelStudyPlan(String planId,
+            StudyPlanStatusChangeRequest request) {
+        return planResponse(studyPlans.cancel(planId, request));
+    }
+
+    @Override public ResponseEntity<StudyPlanTaskPageResponse> listStudyPlanTasks(String planId,
+            java.time.LocalDate taskDate, StudyPlanTaskStatus status, StudyPlanTaskType taskType, Integer page,
+            Integer pageSize) {
+        return ResponseEntity.ok(new StudyPlanTaskPageResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(studyPlans.listTasks(planId, taskDate, status, taskType, page, pageSize)));
+    }
+
+    @Override public ResponseEntity<InlineObject2> createStudyPlanTask(String planId,
+            StudyPlanTaskCreateRequest request) {
+        return ResponseEntity.status(201).body(new InlineObject2().code("CREATED").message("created")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(studyPlans.createTask(planId, request)));
+    }
+
+    @Override public ResponseEntity<InlineObject2> updateStudyPlanTask(String planId, String taskId,
+            StudyPlanTaskUpdateRequest request) {
+        return taskResponse(studyPlans.updateTask(planId, taskId, request));
+    }
+
+    @Override public ResponseEntity<InlineObject2> completeStudyPlanTask(String planId, String taskId,
+            CompleteStudyPlanTaskRequest request) {
+        return taskResponse(studyPlans.completeTask(planId, taskId, request));
+    }
+
+    @Override public ResponseEntity<InlineObject2> skipStudyPlanTask(String planId, String taskId,
+            SkipStudyPlanTaskRequest request) {
+        return taskResponse(studyPlans.skipTask(planId, taskId, request));
+    }
+
+    private ResponseEntity<InlineObject1> planResponse(com.stdntedu.generated.model.StudyPlanDto plan) {
+        return ResponseEntity.ok(new InlineObject1().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(plan));
+    }
+
+    private ResponseEntity<InlineObject2> taskResponse(com.stdntedu.generated.model.StudyPlanTaskDto task) {
+        return ResponseEntity.ok(new InlineObject2().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(task));
     }
 
 }

@@ -3,10 +3,14 @@ package com.stdntedu.common.web;
 import java.time.OffsetDateTime;
 
 import com.stdntedu.base.service.BaseDataService;
+import com.stdntedu.ai.model.service.AiModelService;
 import com.stdntedu.dashboard.service.DashboardService;
 import com.stdntedu.generated.api.DefaultApi;
 import com.stdntedu.generated.model.AcademicTermCreateRequest;
 import com.stdntedu.generated.model.AcademicTermUpdateRequest;
+import com.stdntedu.generated.model.AiModelCreateRequest;
+import com.stdntedu.generated.model.AiModelStatusChangeRequest;
+import com.stdntedu.generated.model.AiModelUpdateRequest;
 import com.stdntedu.generated.model.ExamCreate;
 import com.stdntedu.generated.model.ExamType;
 import com.stdntedu.generated.model.ExamUpdate;
@@ -30,6 +34,9 @@ import com.stdntedu.generated.model.InlineObject28;
 import com.stdntedu.generated.model.InlineObject29;
 import com.stdntedu.generated.model.InlineObject30;
 import com.stdntedu.generated.model.InlineObject31;
+import com.stdntedu.generated.model.InlineObject5;
+import com.stdntedu.generated.model.InlineObject6;
+import com.stdntedu.generated.model.InlineObject7;
 import com.stdntedu.generated.model.InlineObject11;
 import com.stdntedu.generated.model.InlineObject12;
 import com.stdntedu.generated.model.ReviewCreate;
@@ -94,13 +101,14 @@ public class GeneratedApiController implements DefaultApi {
     private final StudentResourceService studentResources;
     private final StudyPlanService studyPlans;
     private final DashboardService dashboard;
+    private final AiModelService aiModels;
     private final RequestIdProvider requestIds;
 
     public GeneratedApiController(BaseDataService baseData, StudentService students, AcademicTermService terms,
             ExamService exams, WrongQuestionService wrongQuestions, MasteryService mastery,
             LearningResourceService resources, ResourceHistoryService resourceHistory, StudyLogService studyLogs,
             StudentResourceService studentResources, StudyPlanService studyPlans, DashboardService dashboard,
-            RequestIdProvider requestIds) {
+            AiModelService aiModels, RequestIdProvider requestIds) {
         this.baseData = baseData;
         this.students = students;
         this.terms = terms;
@@ -113,6 +121,7 @@ public class GeneratedApiController implements DefaultApi {
         this.studentResources = studentResources;
         this.studyPlans = studyPlans;
         this.dashboard = dashboard;
+        this.aiModels = aiModels;
         this.requestIds = requestIds;
     }
 
@@ -419,6 +428,39 @@ public class GeneratedApiController implements DefaultApi {
                 .data(dashboard.get(studentId, academicTermId, date, timezone)));
     }
 
+    @Override public ResponseEntity<InlineObject5> listAiModels() {
+        return ResponseEntity.ok(new InlineObject5().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(aiModels.list()));
+    }
+
+    @Override public ResponseEntity<InlineObject6> createAiModel(AiModelCreateRequest request) {
+        return ResponseEntity.status(201).body(modelResponse(aiModels.create(request), "CREATED", "created"));
+    }
+
+    @Override public ResponseEntity<InlineObject6> getAiModel(String modelId) {
+        return ResponseEntity.ok(modelResponse(aiModels.get(modelId), "OK", "success"));
+    }
+
+    @Override public ResponseEntity<InlineObject6> updateAiModel(String modelId, AiModelUpdateRequest request) {
+        return ResponseEntity.ok(modelResponse(aiModels.update(modelId, request), "OK", "success"));
+    }
+
+    @Override public ResponseEntity<InlineObject6> enableAiModel(String modelId,
+            AiModelStatusChangeRequest request) {
+        return ResponseEntity.ok(modelResponse(aiModels.enable(modelId, request), "OK", "success"));
+    }
+
+    @Override public ResponseEntity<InlineObject6> disableAiModel(String modelId,
+            AiModelStatusChangeRequest request) {
+        return ResponseEntity.ok(modelResponse(aiModels.disable(modelId, request), "OK", "success"));
+    }
+
+    @Override public ResponseEntity<InlineObject7> testAiModelConnection(String modelId) {
+        return ResponseEntity.ok(new InlineObject7().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(aiModels.testConnection(modelId)));
+    }
+
     private ResponseEntity<InlineObject1> planResponse(com.stdntedu.generated.model.StudyPlanDto plan) {
         return ResponseEntity.ok(new InlineObject1().code("OK").message("success")
                 .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(plan));
@@ -427,6 +469,12 @@ public class GeneratedApiController implements DefaultApi {
     private ResponseEntity<InlineObject2> taskResponse(com.stdntedu.generated.model.StudyPlanTaskDto task) {
         return ResponseEntity.ok(new InlineObject2().code("OK").message("success")
                 .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(task));
+    }
+
+    private InlineObject6 modelResponse(com.stdntedu.generated.model.AiModelDto model,
+            String code, String message) {
+        return new InlineObject6().code(code).message(message).requestId(requestIds.current())
+                .timestamp(OffsetDateTime.now()).data(model);
     }
 
 }

@@ -5,6 +5,7 @@ import java.util.List;
 import com.stdntedu.common.api.ApiResponse;
 import com.stdntedu.common.api.ApiResponseFactory;
 import com.stdntedu.common.exception.BusinessException;
+import com.stdntedu.ai.model.security.SensitiveDataRedactor;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -25,9 +26,11 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 public class GlobalExceptionHandler {
 
     private final ApiResponseFactory responses;
+    private final SensitiveDataRedactor redactor;
 
-    public GlobalExceptionHandler(ApiResponseFactory responses) {
+    public GlobalExceptionHandler(ApiResponseFactory responses, SensitiveDataRedactor redactor) {
         this.responses = responses;
+        this.redactor = redactor;
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -42,7 +45,8 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<ApiResponseFactory.ErrorBody>> validation(ConstraintViolationException ex,
             HttpServletRequest request) {
         List<ApiResponseFactory.FieldErrorItem> errors = ex.getConstraintViolations().stream()
-                .map(v -> new ApiResponseFactory.FieldErrorItem(v.getPropertyPath().toString(), v.getMessage(), v.getInvalidValue()))
+                .map(v -> new ApiResponseFactory.FieldErrorItem(v.getPropertyPath().toString(), v.getMessage(),
+                        redactor.redactValue(v.getPropertyPath().toString(), v.getInvalidValue())))
                 .toList();
         return body("VALIDATION_ERROR", "request validation failed", HttpStatus.UNPROCESSABLE_ENTITY, request, errors);
     }
@@ -79,7 +83,8 @@ public class GlobalExceptionHandler {
     }
 
     private ApiResponseFactory.FieldErrorItem fieldError(FieldError error) {
-        return new ApiResponseFactory.FieldErrorItem(error.getField(), error.getDefaultMessage(), error.getRejectedValue());
+        return new ApiResponseFactory.FieldErrorItem(error.getField(), error.getDefaultMessage(),
+                redactor.redactValue(error.getField(), error.getRejectedValue()));
     }
 
     private ResponseEntity<ApiResponse<ApiResponseFactory.ErrorBody>> body(String code, String message, HttpStatus status,

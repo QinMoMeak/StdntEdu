@@ -143,6 +143,10 @@ class FlywayMigrationIntegrationTest {
         List<String> configKeysBeforeV18;
         List<String> schemaBeforeV18;
         Map<String, Integer> v1ToV17Checksums;
+        List<String> businessTablesBeforeV19;
+        List<String> configKeysBeforeV19;
+        List<String> nonAiSchemaBeforeV19;
+        Map<String, Integer> v1ToV18Checksums;
 
         try (Connection connection = DriverManager.getConnection(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
@@ -193,17 +197,17 @@ class FlywayMigrationIntegrationTest {
             v1ToV17Checksums = appliedChecksums(v17Flyway, 17);
         }
 
-        Flyway flyway = Flyway.configure()
+        Flyway v18Flyway = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration")
+                .target(MigrationVersion.fromVersion("18"))
                 .load();
-        flyway.migrate();
+        v18Flyway.migrate();
 
         try (Connection connection = DriverManager.getConnection(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
-            assertExecutedVersions(flyway);
-            assertEquals("18", flyway.info().current().getVersion().toString());
-            assertEquals(v1ToV17Checksums, appliedChecksums(flyway, 17));
+            assertEquals("18", v18Flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV17Checksums, appliedChecksums(v18Flyway, 17));
             assertEquals(44, countBusinessTables(connection));
             assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
             assertEquals(configKeysBeforeV18,
@@ -216,6 +220,36 @@ class FlywayMigrationIntegrationTest {
             assertStudyPlanActionHistoryDefinition(connection);
             assertSchemaFullStudyPlanActionHistoryMatches(connection);
             assertV18MigrationCopiesMatch();
+            businessTablesBeforeV19 = businessTableNames(connection);
+            configKeysBeforeV19 = queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key");
+            nonAiSchemaBeforeV19 = nonAiSchemaSignature(connection);
+            v1ToV18Checksums = appliedChecksums(v18Flyway, 18);
+        }
+
+        Flyway flyway = Flyway.configure()
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .locations("classpath:db/migration")
+                .load();
+        flyway.migrate();
+
+        try (Connection connection = DriverManager.getConnection(
+                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
+            assertExecutedVersions(flyway);
+            assertEquals("19", flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV18Checksums, appliedChecksums(flyway, 18));
+            assertEquals(47, countBusinessTables(connection));
+            assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
+            assertEquals(configKeysBeforeV19,
+                    queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key"));
+            List<String> businessTablesAfterV19 = businessTableNames(connection);
+            assertEquals(businessTablesBeforeV19.size() + 3, businessTablesAfterV19.size());
+            assertTrue(businessTablesAfterV19.containsAll(businessTablesBeforeV19));
+            assertTrue(businessTablesAfterV19.containsAll(List.of(
+                    "ai_secret", "ai_extraction_confirmation", "ai_extraction_confirmation_item")));
+            assertEquals(nonAiSchemaBeforeV19, nonAiSchemaSignature(connection));
+            assertAiV19Definition(connection);
+            assertSchemaFullAiV19Matches(connection);
+            assertV19MigrationCopiesMatch();
         }
     }
 
@@ -469,6 +503,103 @@ class FlywayMigrationIntegrationTest {
         }
     }
 
+    @Test
+    void preservesExistingAiDataWhenMigratingFromV18() throws Exception {
+        try (MySQLContainer<?> mysql = new MySQLContainer<>(mysqlImage())
+                .withDatabaseName("student_growth")
+                .withUsername("student_growth")
+                .withPassword("student_growth")) {
+            mysql.start();
+
+            Flyway v18Flyway = Flyway.configure()
+                    .dataSource(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())
+                    .locations("classpath:db/migration")
+                    .target(MigrationVersion.fromVersion("18"))
+                    .load();
+            v18Flyway.migrate();
+            Map<String, Integer> v1ToV18Checksums = appliedChecksums(v18Flyway, 18);
+            List<String> nonAiSchemaBeforeV19;
+
+            try (Connection connection = DriverManager.getConnection(
+                    mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword());
+                 Statement statement = connection.createStatement()) {
+                statement.executeUpdate("""
+                        INSERT INTO student(id, student_code, name, current_stage_id, current_grade_id)
+                        VALUES (900019, 'V19-AI-STUDENT', 'V19 AI Student', 1, 1)
+                        """);
+                statement.executeUpdate("""
+                        INSERT INTO ai_model(
+                            id, name, provider, model_code, api_base_url, api_key_ref,
+                            supports_vision, supports_json, local_flag, enabled, priority_no, timeout_seconds)
+                        VALUES (
+                            900019, 'Legacy Vision Model', 'OPENAI', 'legacy-vision-model',
+                            'https://ai.example.test/v1', NULL, 1, 1, 0, 1, 50, 90)
+                        """);
+                statement.executeUpdate("""
+                        INSERT INTO ai_analysis(
+                            id, student_id, business_type, business_id, ai_model_id, status,
+                            input_summary, prompt_tokens, completion_tokens, duration_ms)
+                        VALUES (900019, 900019, 'AI_BASELINE', 900019, 900019, 'PENDING',
+                                'legacy input', 10, 5, 120)
+                        """);
+                statement.executeUpdate("""
+                        INSERT INTO ai_extraction_task(
+                            id, task_code, student_id, source_type, source_name, model_id,
+                            status, input_type, recognize_analysis, match_knowledge, mask_personal_info)
+                        VALUES (900019, 'V19-LEGACY-TASK', 900019, 'PRACTICE', 'legacy upload', 900019,
+                                'REVIEW_REQUIRED', 'IMAGE', 1, 1, 1)
+                        """);
+                statement.executeUpdate("""
+                        INSERT INTO ai_extraction_question(
+                            id, task_id, sequence_no, question_text, status, user_modified)
+                        VALUES (900019, 900019, 1, 'legacy temporary question', 'PENDING_REVIEW', 1)
+                        """);
+                nonAiSchemaBeforeV19 = nonAiSchemaSignature(connection);
+                assertEquals(0, queryInt(connection,
+                        "SELECT COUNT(*) FROM ai_model WHERE api_key_ref IS NOT NULL"));
+            }
+
+            Flyway v19Flyway = Flyway.configure()
+                    .dataSource(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())
+                    .locations("classpath:db/migration")
+                    .load();
+            v19Flyway.migrate();
+
+            try (Connection connection = DriverManager.getConnection(
+                    mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())) {
+                assertEquals("19", v19Flyway.info().current().getVersion().toString());
+                assertEquals(v1ToV18Checksums, appliedChecksums(v19Flyway, 18));
+                assertEquals(47, countBusinessTables(connection));
+                assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
+                assertEquals(nonAiSchemaBeforeV19, nonAiSchemaSignature(connection));
+                assertEquals(1, queryInt(connection, "SELECT COUNT(*) FROM ai_model WHERE id = 900019"));
+                assertEquals(1, queryInt(connection, """
+                        SELECT COUNT(*) FROM ai_model
+                        WHERE id = 900019
+                          AND name = 'Legacy Vision Model'
+                          AND provider = 'OPENAI'
+                          AND model_name = 'legacy-vision-model'
+                          AND api_base_url = 'https://ai.example.test/v1'
+                          AND model_type = 'MULTIMODAL'
+                          AND protocol = 'OPENAI_COMPATIBLE'
+                          AND auth_type = 'BEARER_API_KEY'
+                          AND version = 0
+                        """));
+                assertEquals(1, queryInt(connection, """
+                        SELECT COUNT(*) FROM ai_analysis
+                        WHERE id = 900019 AND input_summary = 'legacy input'
+                          AND estimated_cost IS NULL AND currency_code IS NULL
+                        """));
+                assertEquals(1, queryInt(connection, """
+                        SELECT COUNT(*) FROM ai_extraction_question
+                        WHERE id = 900019 AND task_id = 900019
+                          AND question_text = 'legacy temporary question' AND version = 0
+                        """));
+                assertAiV19Definition(connection);
+            }
+        }
+    }
+
     private void assertExecutedVersions(Flyway flyway) {
         List<String> versions = Arrays.stream(flyway.info().applied())
                 .map(MigrationInfo::getVersion)
@@ -476,7 +607,7 @@ class FlywayMigrationIntegrationTest {
                 .toList();
 
         assertEquals(
-                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18"),
+                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"),
                 versions);
     }
 
@@ -574,6 +705,23 @@ class FlywayMigrationIntegrationTest {
                 FROM information_schema.columns
                 WHERE table_schema = DATABASE()
                   AND table_name <> 'flyway_schema_history'
+                ORDER BY table_name, ordinal_position
+                """);
+    }
+
+    private List<String> nonAiSchemaSignature(Connection connection) throws SQLException {
+        return queryStrings(connection, """
+                SELECT CONCAT_WS('|', table_name, column_name, ordinal_position, column_type,
+                                  is_nullable, COALESCE(column_default, '<NULL>'), column_key, extra)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name <> 'flyway_schema_history'
+                  AND table_name NOT IN (
+                      'ai_secret', 'ai_model', 'ai_analysis', 'ai_extraction_task',
+                      'ai_extraction_question', 'ai_extraction_question_knowledge',
+                      'ai_extraction_correction', 'ai_extraction_confirmation',
+                      'ai_extraction_confirmation_item'
+                  )
                 ORDER BY table_name, ordinal_position
                 """);
     }
@@ -1025,6 +1173,163 @@ class FlywayMigrationIntegrationTest {
                         "V18__create_study_plan_action_history.sql")),
                 Files.readAllBytes(Path.of("src", "main", "resources", "db", "migration",
                         "V18__create_study_plan_action_history.sql")));
+    }
+
+    private void assertAiV19Definition(Connection connection) throws SQLException {
+        assertEquals(List.of(
+                "id|bigint|NO|<NULL>",
+                "secret_ref|varchar(255)|NO|<NULL>",
+                "encrypted_value|blob|NO|<NULL>",
+                "nonce|varbinary(32)|NO|<NULL>",
+                "algorithm|varchar(32)|NO|AES-256-GCM",
+                "key_version|int|NO|1",
+                "mask_suffix|varchar(16)|NO|<NULL>",
+                "create_time|datetime(3)|NO|CURRENT_TIMESTAMP(3)",
+                "update_time|datetime(3)|NO|CURRENT_TIMESTAMP(3)"),
+                columnDefinitions(connection, "ai_secret"));
+
+        assertEquals(List.of("int|NO|0"), columnDefinition(connection, "ai_model", "version"));
+        assertEquals(columnDefinition(connection, "learning_resource", "version"),
+                columnDefinition(connection, "ai_model", "version"));
+        assertEquals(List.of("text|YES|<NULL>"), columnDefinition(connection, "ai_model", "remark"));
+        assertEquals(List.of("varchar(512)|NO|<NULL>"), columnDefinition(connection, "ai_model", "api_base_url"));
+        assertEquals(List.of("decimal(4,3)|YES|<NULL>"), columnDefinition(connection, "ai_model", "temperature"));
+        assertEquals(List.of("int|YES|<NULL>"), columnDefinition(connection, "ai_model", "max_tokens"));
+        assertEquals(List.of("int|NO|0"),
+                columnDefinition(connection, "ai_extraction_question", "version"));
+        assertEquals(List.of("decimal(18,6)|YES|<NULL>"),
+                columnDefinition(connection, "ai_analysis", "estimated_cost"));
+        assertEquals(List.of("char(3)|YES|<NULL>"),
+                columnDefinition(connection, "ai_analysis", "currency_code"));
+
+        for (String constraint : List.of(
+                "chk_ai_model_provider", "chk_ai_model_type", "chk_ai_model_protocol",
+                "chk_ai_model_auth_type", "chk_ai_model_temperature", "chk_ai_model_max_tokens")) {
+            assertConstraint(connection, "ai_model", constraint, "CHECK");
+        }
+        assertCheckContains(connection, "chk_ai_model_provider",
+                List.of("DOUBAO", "QWEN", "DEEPSEEK", "OPENAI", "OLLAMA", "CUSTOM"));
+        assertCheckContains(connection, "chk_ai_model_type", List.of("CHAT", "MULTIMODAL", "EMBEDDING"));
+        assertCheckContains(connection, "chk_ai_model_protocol", List.of("OPENAI_COMPATIBLE", "OLLAMA"));
+        assertCheckContains(connection, "chk_ai_model_auth_type", List.of("NONE", "BEARER_API_KEY"));
+        assertCheckContains(connection, "chk_ai_extraction_input_type", List.of("IMAGE", "PDF", "MIXED"));
+        assertConstraint(connection, "ai_extraction_task", "chk_ai_extraction_input_type", "CHECK");
+
+        assertConstraint(connection, "ai_model", "fk_ai_model_secret", "FOREIGN KEY");
+        assertEquals(List.of("api_key_ref|ai_secret|secret_ref"), queryStrings(connection, """
+                SELECT CONCAT_WS('|', column_name, referenced_table_name, referenced_column_name)
+                FROM information_schema.key_column_usage
+                WHERE constraint_schema = DATABASE()
+                  AND table_name = 'ai_model'
+                  AND constraint_name = 'fk_ai_model_secret'
+                ORDER BY ordinal_position
+                """));
+
+        assertUniqueIndexColumns(connection, "ai_extraction_confirmation",
+                "uk_aic_task_idempotency", List.of("task_id", "idempotency_key"));
+        assertUniqueIndexColumns(connection, "ai_extraction_confirmation_item",
+                "uk_aici_question", List.of("question_id"));
+        assertUniqueIndexColumns(connection, "ai_extraction_confirmation_item",
+                "uk_aici_wrong_question", List.of("wrong_question_id"));
+        assertUniqueIndexColumns(connection, "ai_extraction_question_knowledge",
+                "uk_aeqk_question_knowledge", List.of("extraction_question_id", "knowledge_id"));
+        assertUniqueIndexColumns(connection, "ai_extraction_question",
+                "uk_ai_extraction_question_task_id", List.of("task_id", "id"));
+
+        assertEquals(List.of("task_id|task_id", "question_id|id"), queryStrings(connection, """
+                SELECT CONCAT_WS('|', column_name, referenced_column_name)
+                FROM information_schema.key_column_usage
+                WHERE constraint_schema = DATABASE()
+                  AND table_name = 'ai_extraction_correction'
+                  AND constraint_name = 'fk_aec_task_question'
+                ORDER BY ordinal_position
+                """));
+        assertConstraint(connection, "ai_analysis", "chk_ai_analysis_estimated_cost", "CHECK");
+        assertConstraint(connection, "ai_analysis", "chk_ai_analysis_currency", "CHECK");
+        assertConstraint(connection, "ai_extraction_confirmation", "chk_aic_status", "CHECK");
+        assertCheckContains(connection, "chk_aic_status", List.of("PROCESSING", "COMPLETED"));
+    }
+
+    private void assertSchemaFullAiV19Matches(Connection connection) throws Exception {
+        List<String> schemaLines = Files.readAllLines(Path.of("database", "schema-full.sql"));
+        String aiModel = schemaLines.stream().filter(line -> line.startsWith("CREATE TABLE ai_model("))
+                .findFirst().orElseThrow();
+        String aiSecret = schemaLines.stream().filter(line -> line.startsWith("CREATE TABLE ai_secret("))
+                .findFirst().orElseThrow();
+        String question = schemaLines.stream()
+                .filter(line -> line.startsWith("CREATE TABLE ai_extraction_question("))
+                .findFirst().orElseThrow();
+        String confirmation = schemaLines.stream()
+                .filter(line -> line.startsWith("CREATE TABLE ai_extraction_confirmation("))
+                .findFirst().orElseThrow();
+        String confirmationItem = schemaLines.stream()
+                .filter(line -> line.startsWith("CREATE TABLE ai_extraction_confirmation_item("))
+                .findFirst().orElseThrow();
+        String analysis = schemaLines.stream().filter(line -> line.startsWith("CREATE TABLE ai_analysis("))
+                .findFirst().orElseThrow();
+
+        for (String token : List.of("model_name", "model_type", "protocol", "auth_type", "api_base_url",
+                "temperature", "max_tokens", "remark", "version", "fk_ai_model_secret")) {
+            assertTrue(aiModel.contains(token));
+        }
+        assertFalse(aiModel.contains("model_code"));
+        for (String token : List.of("encrypted_value", "nonce", "AES-256-GCM", "key_version", "mask_suffix")) {
+            assertTrue(aiSecret.contains(token));
+        }
+        assertTrue(question.contains("version INT NOT NULL DEFAULT 0"));
+        assertTrue(question.contains("uk_ai_extraction_question_task_id"));
+        assertTrue(confirmation.contains("uk_aic_task_idempotency"));
+        assertTrue(confirmationItem.contains("uk_aici_question"));
+        assertTrue(confirmationItem.contains("uk_aici_wrong_question"));
+        assertTrue(analysis.contains("estimated_cost DECIMAL(18,6)"));
+        assertTrue(analysis.contains("currency_code CHAR(3)"));
+        assertEquals(47, countBusinessTables(connection));
+    }
+
+    private List<String> columnDefinitions(Connection connection, String tableName) throws SQLException {
+        return queryStrings(connection, """
+                SELECT CONCAT_WS('|', column_name, column_type, is_nullable,
+                                 COALESCE(column_default, '<NULL>'))
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE() AND table_name = ?
+                ORDER BY ordinal_position
+                """, tableName);
+    }
+
+    private List<String> columnDefinition(Connection connection, String tableName, String columnName)
+            throws SQLException {
+        return queryStrings(connection, """
+                SELECT CONCAT_WS('|', column_type, is_nullable, COALESCE(column_default, '<NULL>'))
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
+                """, tableName, columnName);
+    }
+
+    private void assertCheckContains(Connection connection, String constraintName, List<String> values)
+            throws SQLException {
+        String clause = queryStrings(connection, """
+                SELECT check_clause
+                FROM information_schema.check_constraints
+                WHERE constraint_schema = DATABASE() AND constraint_name = ?
+                """, constraintName).getFirst();
+        for (String value : values) assertTrue(clause.contains(value));
+    }
+
+    private void assertUniqueIndexColumns(Connection connection, String tableName, String indexName,
+            List<String> expectedColumns) throws SQLException {
+        assertEquals(expectedColumns, queryStrings(connection, """
+                SELECT column_name
+                FROM information_schema.statistics
+                WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? AND non_unique = 0
+                ORDER BY seq_in_index
+                """, tableName, indexName));
+    }
+
+    private void assertV19MigrationCopiesMatch() throws Exception {
+        assertArrayEquals(
+                Files.readAllBytes(Path.of("database", "flyway", "V19__complete_ai_foundation.sql")),
+                Files.readAllBytes(Path.of("src", "main", "resources", "db", "migration",
+                        "V19__complete_ai_foundation.sql")));
     }
 
     private List<String> studyLogColumnSignature(Connection connection, String tableName) throws SQLException {

@@ -1,4 +1,45 @@
-# OpenAPI V3.4.1 验证报告
+# OpenAPI V3.5.0 验证报告
+
+## V3.5.0 AI 基础安全与数据闭环
+
+V3.5.0 将阶段十 AI 实现所需的模型能力、协议、认证、Secret 生命周期、乐观锁、识别确认幂等和异步计划生成语义固定为可生成契约，并将数据库基线升级到 Flyway V19。路径和 operationId 均未增加、删除或重命名；本次是 AI 子系统的大版本契约闭环，不是兼容性 patch。
+
+- `AiModelCreateRequest`、`AiModelUpdateRequest` 和 `AiModelDto` 对齐 `provider`、`modelName`、`modelType`、`protocol`、`authType`、`baseUrl`、`temperature`、`maxTokens`、`remark` 和能力标志。更新与启停均要求 version，启停请求生成为 `AiModelStatusChangeRequest`。
+- 完整 `apiKey` 只存在于 create/update 的 writeOnly 输入。响应只返回 `apiKeyConfigured` 和 `apiKeyMasked`；update 的 `clearApiKey` 固定保留、替换、清除三种生命周期语义。
+- `testAiModelConnection` 不再生成无类型 Object body，仅接收 path `modelId` 并返回 `AiModelConnectionTestDto`；操作固定为只读且必须脱敏。
+- `AiExtractionQuestionDto.version` 为必填只读字段，更新请求 version 必填；`AiInputType` 固定为 IMAGE、PDF、MIXED，并由服务端依据上传文件推导。
+- confirm 固定为 all-or-nothing 本地事务；`(taskId, Idempotency-Key)` 和规范化请求 SHA-256 共同决定重放或 `409 IDEMPOTENCY_CONFLICT`，不允许 partial success。
+- `AiAnalysisDto.status` 复用与数据库 CHECK 一致的 `AiTaskStatus`。成功值沿用冻结编码 `SUCCESS`，不引入 `COMPLETED`；成本使用非负 `DECIMAL(18,6)` 和可空三位大写货币代码。
+- `generateStudyPlan` 保留原 URL、operationId 和 HTTP 202，但成功响应改为 `AiAnalysisDto`。未来实现只创建 PENDING analysis；成功落库时创建 DRAFT plan 并将 analysis 改为 SUCCESS，失败改为 FAILED，不创建占位计划。
+
+## V3.5.0 校验与生成结果
+
+- OpenAPI 文件：3.1.0 规范，`info.version=3.5.0`，709 行。
+- 结构统计：86 个路径模板、116 个操作、156 个 Schema、70 个 Response 组件；operationId 为 116/116/0，Path Variable 缺口为 0。
+- Swagger CLI：通过，exit 0。
+- Redocly recommended lint：通过，errors 0、warnings 0。
+- Node 24.18.0 下的 `npx @openapitools/openapi-generator-cli` wrapper 仍在命令转发前退出 1。使用 Java 21 与本地 Maven 仓库中的 OpenAPI Generator CLI 7.10.0 JAR执行同等 validate，结果通过；仅报告 4 个既有未使用模型建议：`Error`、`ResourceCreateRequest`、`ResourceUpdateRequest`、`AiExtractionConfirmResultDto`。
+- Java client model generation、TypeScript Fetch generation 及 Maven Spring generation 均通过。Java BIGINT ID 生成为 `String`，TypeScript 生成为 `string`；version 生成为 Java `Integer` / TypeScript `number`。
+- 生成抽查确认：`AiModelDto` 不含完整 `apiKey`；update 的 `apiKey` 保持 writeOnly，`clearApiKey` 为 Boolean；连接测试、状态变更、临时题 version、输入类型和分析状态均生成明确类型。
+
+## Flyway V19 验证结果
+
+- V19 新增 `ai_secret`、`ai_extraction_confirmation`、`ai_extraction_confirmation_item`，并只补齐既有 AI 表的字段与完整性约束；业务表由 44 增至 47，`system_config` 保持 31。
+- `ai_secret` 使用 `secret_ref` 唯一键、加密值、12-byte nonce、固定 `AES-256-GCM`、`key_version>=1` 和非敏感 `mask_suffix`。`ai_model.api_key_ref` 已通过外键引用 `ai_secret.secret_ref`。
+- `ai_model.version` 使用 `INT NOT NULL DEFAULT 0`，参考 `learning_resource`、`study_log` 和 `student_resource_assignment` 的非 StudyPlan 乐观锁规范。
+- Provider、ModelType、Protocol、AuthType、temperature、maxTokens、inputType、confirmation status、request hash、成本和货币代码均有数据库 CHECK；临时题 version、确认唯一键、一对一映射、correction 复合外键和知识点去重约束均已验证。
+- 两份 V19 SHA-256 均为 `C369D3D17A46ED3ECDD512C8F42B63FA49EAC584F1850F7D981BAB8133D081F9`，内容逐字一致。`schema-full.sql` 已同步 V19 后完整 AI 结构，非 AI 表结构未变化。
+- Testcontainers MySQL 8 从空库成功执行 V1-V19，最终版本 v19；独立 V18→V19 存量 AI 数据升级验证保留原主键和业务字段，并正确回填 modelType、protocol、authType 与 version。V1-V18 已应用 checksum 保持不变。
+- `mvnw.cmd clean test`：通过，tests 192、failures 0、errors 0、skipped 0。
+- `mvnw.cmd clean package`：通过，tests 192、failures 0、errors 0、skipped 0，可执行 JAR 打包成功。
+- 由于阶段七测试同时使用 JVM `LocalDate.now()` 和 MySQL `CURRENT_TIMESTAMP`，上海时区凌晨会跨 UTC 日期。回归通过时仅对测试连接设置 `sessionVariables time_zone=+08:00`，未修改应用配置或源码；该测试时区耦合留待后续独立治理。
+
+## 尚未实现与后续事项
+
+- 本轮未实现 AiModelService、Provider Adapter、Secret 加解密代码、Extraction/Analysis worker、`generateStudyPlan` worker 或任何外部模型调用。
+- 阶段十实现必须统一清理 `apiKey`、Authorization、token、secret、password，包括 `fieldErrors.rejectedValue`、operation log、应用日志及 Provider 异常；当前 `GlobalExceptionHandler` 的回显风险仍需处理。
+- Spring multipart 大小必须在 AI 业务实现阶段显式配置；本轮未修改 application YAML。
+- AI analysis 历史组合索引仅记录为后续 EXPLAIN 驱动的性能候选，本轮未增加纯性能索引。
 
 ## V3.4.1 StudyPlan 操作历史持久化语义
 

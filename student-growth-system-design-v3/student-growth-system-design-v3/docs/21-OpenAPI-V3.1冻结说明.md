@@ -1,4 +1,51 @@
-# OpenAPI V3.4.1 冻结说明
+# OpenAPI V3.5.0 冻结说明
+
+## V3.5.0 AI 基础安全与 Flyway V19
+
+V3.5.0 是阶段十 AI 后端开发的新契约基线，数据库基线同步升级为 Flyway V19，Mastery Algorithm 保持 V1.0。本次包含模型字段重构、并发契约、Secret 安全模型、识别确认幂等闭环及异步计划生成响应修订，属于 AI 子系统的大版本契约变更，不是兼容性 patch。V1-V18 保持冻结。
+
+### AI Model 与 Provider
+
+1. `AiModel` 必须明确提供 `provider`、`modelType`、`protocol`、`authType`、`baseUrl` 和 `modelName`。Provider 只表示品牌或来源，Protocol 决定请求格式，AuthType 决定是否需要 Secret；服务端不得根据 Provider 名称隐藏推断协议或默认 URL。
+2. `AiModelType` 固定为 `CHAT`、`MULTIMODAL`、`EMBEDDING`；错题图片/PDF识别只允许 `MULTIMODAL`，计划生成允许 `CHAT` 或 `MULTIMODAL`，`EMBEDDING` 不得用于这两类任务。
+3. `AiProtocol` 固定为 `OPENAI_COMPATIBLE`、`OLLAMA`；`AiAuthType` 固定为 `NONE`、`BEARER_API_KEY`。已禁用模型不得启动新任务；已开始任务在模型被停用后的行为留待任务实现阶段冻结。
+4. `temperature` 是可空的 `0–2` 模型默认值，数据库使用 `DECIMAL(4,3)`；`maxTokens` 是可空正整数。未来单次请求覆盖值必须另行修订契约。
+5. `AiModelUpdateRequest.version` 以及启用/停用使用的 `AiModelStatusChangeRequest.version` 均必填。状态操作成功后 version 加一，旧 version 返回 `409 DATA_VERSION_CONFLICT`。数据库 version 遵循非 StudyPlan 实体规范，使用 `INT NOT NULL DEFAULT 0`。
+6. `testAiModelConnection` 不接收请求体，只使用已保存配置，并返回 `AiModelConnectionTestDto`。它是只读操作，不修改 enabled、version、API Key 或其他模型状态；Provider 错误、响应体和 URL 中的敏感信息必须脱敏。
+
+### Secret 安全边界
+
+1. Provider Secret 使用 AES-256-GCM 加密。主密钥只从环境变量 `STDNTEDU_AI_SECRET_MASTER_KEY` 读取，格式为 Base64 编码的 32-byte key；不得写入数据库、YAML、Git、日志或 API。
+2. 每个 Secret 使用独立随机 12-byte nonce和标准 GCM 认证标签，AAD 为 `secret_ref` 的 UTF-8 字节；`algorithm` 固定为 `AES-256-GCM`，当前 `key_version=1`。V3.5.0 不实现自动密钥轮换。
+3. `ai_model.api_key_ref` 通过外键引用 `ai_secret.secret_ref`。完整 `apiKey` 仅能通过模型创建/更新请求以 `writeOnly` 输入，不提供 Secret 查询 API。
+4. 更新时：省略 `apiKey` 且 `clearApiKey=false` 保留原 Secret；提供非空 `apiKey` 且不清除时新建或替换；`clearApiKey=true` 时清除引用并删除 Secret。`apiKey` 与清除标志同时提交、或提交空字符串，返回 422。
+5. `apiKeyConfigured` 仅由引用是否存在判断；`apiKeyMasked` 使用数据库中的非敏感 `mask_suffix` 生成 `****` 加后缀，不得为了显示掩码而解密 Secret。
+6. `AiModelDto`、统一错误、`fieldErrors.rejectedValue`、operation log、应用日志和 Provider 异常均不得包含 `apiKey`、Authorization、token、secret 或 password。当前 `GlobalExceptionHandler` 可能回显 rejectedValue，AI 实现阶段必须统一脱敏，本轮不修改 Java 源码。
+
+### Extraction 与幂等确认
+
+1. `AiInputType` 固定为 `IMAGE`、`PDF`、`MIXED`，由服务端按实际 MIME 推导，客户端不得提交。全 JPEG/PNG/WEBP 为 IMAGE，全 PDF 为 PDF，两者混合为 MIXED。
+2. 图片单文件最大 15 MB，PDF 单文件最大 50 MB，单任务最多 20 个文件；其他 MIME 返回 415，超限返回 413。业务实现阶段必须显式配置 Spring multipart 限制，不得依赖框架默认值，本轮不修改 application YAML。
+3. 临时题响应与更新请求均使用必填 version；旧版本更新返回 `409 DATA_VERSION_CONFLICT`。数据库使用 `INT NOT NULL DEFAULT 0`。
+4. confirm 固定为本地数据库全事务语义，只接受 `atomic=true`。创建最终错题、确认映射以及临时题变为 SAVED 必须全部成功或全部回滚，不允许 partial success；IGNORED/INVALID 或请求中 `save=false` 的题目不得自动视为 SAVED。
+5. `ai_extraction_confirmation` 以 `(task_id,idempotency_key)` 唯一，`request_hash` 是规范化请求载荷的 SHA-256 十六进制摘要。相同 key 和相同 hash 的 COMPLETED 请求直接返回首次 `result_json`；相同 key 配合不同 hash 返回 `409 IDEMPOTENCY_CONFLICT`。
+6. `ai_extraction_confirmation_item` 固定临时题与最终错题的一对一关系。状态仅使用 PROCESSING、COMPLETED；失败事务整体回滚，不持久化 FAILED 伪结果。
+7. correction 使用 `(task_id,question_id)` 复合外键确保题目属于任务；知识点候选使用 `(extraction_question_id,knowledge_id)` 唯一约束去重。
+
+### Analysis 与计划生成
+
+1. `AiAnalysisDto.status` 复用 `AiTaskStatus`，与 V10 `ai_analysis.status` CHECK 完全一致。成功态继续使用 `SUCCESS`；指令中出现的 `COMPLETED` 按既有冻结枚举校准为 `SUCCESS`，不增加第二个成功编码。
+2. `estimatedCost` 使用可空非负 `DECIMAL(18,6)`，`currencyCode` 使用可空三位大写货币代码，不限定具体币种。
+3. `generateStudyPlan` 成功受理返回 HTTP 202 和 `AiAnalysisDto`。未来实现只创建 PENDING 分析并立即返回，不得创建占位 StudyPlan，也不得使用模板、随机或无模型回退冒充 AI。
+4. Worker 成功时在同一最终落库事务创建 DRAFT StudyPlan、设置 `study_plan.source_analysis_id=ai_analysis.id` 并把分析状态改为 SUCCESS；失败时只改为 FAILED，不创建计划。
+
+V19 新增 `ai_secret`、`ai_extraction_confirmation`、`ai_extraction_confirmation_item`，将业务表从 44 增加到 47；`system_config` 保持 31。本轮不增加纯性能索引，AI analysis 历史组合索引留待真实查询与 EXPLAIN 后评估。
+
+### V3.5.0 冻结验证
+
+Swagger CLI 和 Redocly recommended lint 均通过，Redocly 为 0 errors / 0 warnings。OpenAPI Generator CLI 7.10.0 JAR validate、Java client、TypeScript Fetch 和 Maven Spring 生成均成功；Node 24.18.0 下的 npx wrapper 仍在命令转发前失败，因此不作为契约失败处理。当前为 86 个路径模板、116 个操作、156 个 Schema，operationId 116/116/0，Path Variable 缺口 0。
+
+Testcontainers MySQL 8 已验证空库 V1-V19 和 V18 存量 AI 数据升级，最终版本 v19、47 张业务表、31 项 `system_config`。两份 V19 SHA-256 均为 `C369D3D17A46ED3ECDD512C8F42B63FA49EAC584F1850F7D981BAB8133D081F9`。`clean test` 与 `clean package` 均为 192 项测试通过；V1-V18、Mastery Algorithm V1.0 和非 AI 业务源码未修改。
 
 ## V3.4.1 StudyPlan 操作历史与 Flyway V18
 
@@ -146,7 +193,7 @@ V3.1.1 是阶段四考试与成绩模块的新契约基线，在 V3.1 的基础�
 
 ## 冻结结论
 
-OpenAPI V3.4.1 是阶段八 B-2 实现前的契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构、持久化映射或计算公式。
+OpenAPI V3.5.0 是阶段十 AI 后端开发的契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构、持久化映射、加密规则或计算公式。
 
 本冻结包括统一响应模型、分页模型、错误模型、安全定义、文件上传下载约束、异步任务模型以及核心枚举。所有数据库 BIGINT ID 通过 API 返回 `string`。核心枚举编码与数据库 V1 至 V13 的 CHECK 约束保持一致。
 
@@ -164,7 +211,7 @@ OpenAPI V3.4.1 是阶段八 B-2 实现前的契约基线。后续开发必须按
 
 ## 数据库边界
 
-数据库 V1 至 V17 已冻结，不得回写或重定义既有迁移的业务语义。V18 只创建不可变 `study_plan_action_history`，不修改原有业务表字段或 system_config；后续数据库变更必须使用新的迁移版本。
+数据库 V1 至 V18 已冻结，不得回写或重定义既有迁移的业务语义。V19 只完成本节列出的 AI 安全与数据闭环，不修改其他业务域或 system_config；后续数据库变更必须使用新的迁移版本。
 
 ## 安全边界
 

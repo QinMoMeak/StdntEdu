@@ -1,4 +1,36 @@
-# OpenAPI V3.5.0 验证报告
+# OpenAPI V3.6.0 验证报告
+
+## V3.6.0 AI Extraction 视觉输入与 PDF 归一化
+
+V3.6.0 是阶段十B实现前的新契约基线。本次没有新增、删除或重命名路径、operationId、Schema、字段或枚举，只冻结 Provider 视觉输入和 PDF 归一化语义。由于新增 normalized visual unit 上限并收窄客户端有效输入范围，本次按 minor 版本升级，不视为 V3.5.x 兼容性 patch。
+
+- Provider 只接收 `TEXT + IMAGE[]`，原始 PDF 永不直接发送给 Provider。创建任务前完成文件真实类型、PDF 可解析性、加密/密码保护、页数与 visual unit 上限检查；无效 PDF 返回 422 且不创建 Attachment、Task 或临时题。
+- 每张 JPEG/PNG/WEBP 和每个 PDF 页面分别计 1 normalized visual unit，单任务上限为 20；该限制与最多 20 个文件、图片 15 MB、PDF 50 MB 的限制并行生效，超限返回 413。
+- PDF 按上传位置和页序以 RGB、150 DPI、JPEG quality 0.92 渲染；不做 OCR、text layer 提取、页面重排或空白页跳过。页面图片仅为瞬时处理产物，原始 PDF Attachment 正常保留；WEBP 在进入 Provider 前归一化为 PNG 或 JPEG。
+- OpenAI-compatible 固定调用 `{baseUrl}/chat/completions`，使用 multimodal chat content parts 与 image data URL；Ollama 固定调用 `{baseUrl}/api/chat`，`images` 使用不含 data URL 前缀的纯 base64。两者均为一次任务一次 Provider 调用，不拆批、不合并。
+- Provider 返回必须整体转换并校验为内部 `AiExtractionProviderResult` 后才能进入业务层。协议拒绝、超限或结构异常时任务整体失败，不自动降 DPI、丢页、OCR、拆批或切换协议。
+- `AiInputType` 继续为 `IMAGE`、`PDF`、`MIXED`，描述客户端原始上传组成；PDF 渲染后仍保持原输入类型。normalized visual unit 和 Provider result 均为内部模型，不新增公开 DTO。
+
+## V3.6.0 校验与生成结果
+
+- OpenAPI 文件：3.1.0 规范，`info.version=3.6.0`，766 行。
+- 结构统计：86 个路径模板、116 个操作、156 个 Schema、70 个 Response 组件、21 个 Parameter 组件；operationId 为 116/116/0。
+- Path Variable 审计：规范内 77 处路径变量全部声明且 `required: true`；Maven Spring 生成接口的 77 处变量全部生成显式 `String @PathVariable` 参数，缺口为 0。
+- Swagger CLI：通过，exit 0。
+- Redocly recommended lint：通过，errors 0、warnings 0。
+- OpenAPI Generator CLI 7.10.0 JAR validate：通过。Windows 绝对路径会被该版本解析为 URI，因此使用仓库相对路径执行；仅保留 4 个既有未使用模型建议：`Error`、`ResourceCreateRequest`、`ResourceUpdateRequest`、`AiExtractionConfirmResultDto`。
+- Java client model generation：通过，exit 0；`AiInputType` 生成值仍为 `IMAGE`、`PDF`、`MIXED`。
+- TypeScript Fetch generation：通过，exit 0；`AiInputType` 生成联合类型仍为 `IMAGE | PDF | MIXED`。Generator 的既有 inline model 和保留字重命名 warning 未造成解析或生成失败。
+- Maven Spring generation、编译与打包：通过。`createAiExtractionTask` 仍生成既有 multipart 参数，不新增 visual unit 或 Provider result DTO。
+- `mvnw.cmd clean test`：通过，tests 217、failures 0、errors 0、skipped 0。
+- `mvnw.cmd clean package`：通过，tests 217、failures 0、errors 0、skipped 0，可执行 JAR 打包成功。
+- Testcontainers MySQL 8 从空库成功执行 V1-V19，最终版本 v19；业务表保持 47，`system_config` 保持 31。数据库、Flyway V1-V19、Java 业务源码和测试源码均未修改。
+
+## V3.6.0 未解决与实现边界
+
+- Stage10B 实现前仍需评审 Java 21 可用的 PDF renderer 与 WEBP decoder 依赖、许可证、资源上限和临时文件清理策略；本轮未修改 `pom.xml` 或应用配置。
+- Provider response 的具体内部 Java 类型、JSON 映射和校验器属于 Stage10B 实现，不得作为公开 OpenAPI DTO 暴露。
+- 本轮未开始 Extraction Upload、Review、Confirm 业务实现，也未调用任何真实 AI Provider。
 
 ## V3.5.0 AI 基础安全与数据闭环
 

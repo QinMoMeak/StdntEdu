@@ -1,4 +1,66 @@
-# OpenAPI V3.5.0 冻结说明
+# OpenAPI V3.6.0 冻结说明
+
+## V3.6.0 AI Extraction Visual Input
+
+V3.6.0 是阶段十B AI 错题识别实现的新契约基线。本次只冻结 Provider 视觉输入和 PDF
+归一化语义，不新增路径、字段、Schema、枚举或数据库结构。由于新增 normalized visual unit
+上限并收窄客户端有效输入范围，本次是 minor 版本升级，不作为 V3.5.x 兼容性 patch。
+
+### 输入与 Preflight
+
+1. 客户端继续通过 multipart 上传 JPEG、PNG、WEBP 和 PDF。图片单文件最大 15 MB，PDF
+   单文件最大 50 MB，上传文件数最多 20；文件大小、文件数与 visual unit 是彼此独立的限制。
+2. `AiInputType` 只描述客户端原始输入组成：全部 JPEG/PNG/WEBP 为 `IMAGE`，全部 PDF 为
+   `PDF`，两类并存为 `MIXED`。PDF 页面转换成 JPEG 后，任务 inputType 仍保持 PDF 或 MIXED。
+3. Normalized visual unit 是内部处理语义，不新增公开 DTO：每张 JPEG/PNG/WEBP 计 1 unit，
+   每个 PDF 页面计 1 unit，MIXED 为图片数加全部 PDF 页数；整个任务最多 20 units。超出返回
+   413 `PAYLOAD_TOO_LARGE`。
+4. 创建 Task 前必须检查真实 MIME/magic、可解析性、PDF 是否加密或需要密码、pageCount 是否
+   至少为 1，以及任务 visual units 是否超限。损坏、不可解析、加密、密码保护或 0 页 PDF
+   返回 422 `BUSINESS_RULE_VIOLATION`，不得形成业务 Attachment、Task 或临时题记录；临时文件
+   必须清理。
+
+### PDF 与图片归一化
+
+1. 原始 PDF 永远不发送给 Provider。PDF 是应用内部输入格式，Provider 推理输入统一为
+   `TEXT + IMAGE[]`，处理链固定为 PDF -> 本地页面渲染 -> raster image -> Provider Adapter。
+2. PDF 每页按原顺序渲染为 RGB 图片，基准为 150 DPI、JPEG quality 0.92。标准 renderer
+   可以应用页面自身 rotation，但不得 OCR、提取 text layer、重排页面、跳过空白页或改变页序。
+3. PDF renderer 只能执行本地页面渲染，不得执行脚本、访问远程 URL 或加载外部网络资源。
+4. 页面 JPEG 是 transient processing artifact：不创建 Attachment、不写数据库、不返回客户端，
+   在任务处理结束后释放。原始 PDF Attachment 继续按正常附件生命周期保留。
+5. JPEG、PNG 验证真实类型后可直接进入 Provider 视觉输入；WEBP 必须在 Provider 层之前解码并
+   归一化为 PNG 或 JPEG，不能依赖具体 Provider 恰好支持 WEBP。Java 21 解码依赖及许可证留到
+   Stage10B 实现阶段评审，本轮不修改 `pom.xml`。
+
+### 顺序与 Provider Transport
+
+1. Provider visual input 严格保持 multipart 文件顺序。PDF 在原文件位置展开为 page 1..N；
+   不得按 MIME、文件名或其他属性重新排序。
+2. 一个 Extraction Task 固定为一次 Provider extraction 请求，不实现 chunk、overlap、页面去重、
+   分页多请求或 multi-call merge。未来若真实 payload 限制需要分块，必须另立契约版本。
+3. `OPENAI_COMPATIBLE` 使用 `POST {baseUrl}/chat/completions`，不得隐藏追加 `/v1`。请求设置
+   `model=modelName`、`stream=false`，user message 使用 TEXT part 和 IMAGE parts；JPEG/PNG
+   分别通过 `data:image/jpeg;base64,...`、`data:image/png;base64,...` 表示。兼容范围仅包括
+   multimodal chat completions 子集，不承诺 Files、Assistants、Responses API 或 PDF native input。
+4. `OLLAMA` 使用 `POST {baseUrl}/api/chat`，请求设置 `model=modelName`、`stream=false`；user
+   message 的 `content` 是 extraction prompt，`images` 是 normalized image bytes 的纯 base64
+   数组，不含 data URL 前缀。PDF 页面到达 Adapter 前已转换为 JPEG，禁止把 PDF bytes 放入 images。
+5. Ollama 可使用 `format=json` 或官方 JSON schema structured output；所有 Adapter 都必须返回
+   内部强类型 `AiExtractionProviderResult`，不得把 Provider 原始 JSON直接传给 Service。JSON 不符合
+   应用预期时任务失败，不保存半解析临时题。
+
+### 失败与安全边界
+
+Provider 因 payload、图片、多模态、context limit 或协议不兼容拒绝请求时，整个 Task 失败；
+不得减少页面、降低 DPI、丢弃输入、OCR、分批、自动切换协议或静默回退。Preflight 成功后若页面
+渲染失败，Task 同样进入 `FAILED`，释放已生成的临时图片且不保存部分问题。Prompt 可以按业务需要
+包含原始显示文件名和页序号，但不得包含 `attachment.storage_path`、本地路径、Secret、API Key 或
+无关学生数据。
+
+V3.6.0 没有数据库变化。Flyway 仍为 V19，业务表仍为 47，`system_config` 仍为 31；V19 已能保存
+原始 Attachment、Extraction Task、input_type、临时题和确认记录，页面图片无需持久化，因此禁止创建
+空 V20 或向 Attachment 增加 page/converted/rendered path 字段。
 
 ## V3.5.0 AI 基础安全与 Flyway V19
 
@@ -193,7 +255,7 @@ V3.1.1 是阶段四考试与成绩模块的新契约基线，在 V3.1 的基础�
 
 ## 冻结结论
 
-OpenAPI V3.5.0 是阶段十 AI 后端开发的契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构、持久化映射、加密规则或计算公式。
+OpenAPI V3.6.0 是阶段十B AI 错题识别开发的契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构、持久化映射、加密规则、视觉输入转换或计算公式。
 
 本冻结包括统一响应模型、分页模型、错误模型、安全定义、文件上传下载约束、异步任务模型以及核心枚举。所有数据库 BIGINT ID 通过 API 返回 `string`。核心枚举编码与数据库 V1 至 V13 的 CHECK 约束保持一致。
 

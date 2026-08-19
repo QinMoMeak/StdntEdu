@@ -4,6 +4,10 @@ import java.time.OffsetDateTime;
 
 import com.stdntedu.base.service.BaseDataService;
 import com.stdntedu.ai.model.service.AiModelService;
+import com.stdntedu.ai.extraction.service.AiExtractionConfirmationService;
+import com.stdntedu.ai.extraction.service.AiExtractionQuestionService;
+import com.stdntedu.ai.extraction.service.AiExtractionService;
+import com.stdntedu.ai.extraction.service.CreateExtractionCommand;
 import com.stdntedu.dashboard.service.DashboardService;
 import com.stdntedu.generated.api.DefaultApi;
 import com.stdntedu.generated.model.AcademicTermCreateRequest;
@@ -11,6 +15,11 @@ import com.stdntedu.generated.model.AcademicTermUpdateRequest;
 import com.stdntedu.generated.model.AiModelCreateRequest;
 import com.stdntedu.generated.model.AiModelStatusChangeRequest;
 import com.stdntedu.generated.model.AiModelUpdateRequest;
+import com.stdntedu.generated.model.AiConfirm;
+import com.stdntedu.generated.model.AiExtractionQuestionUpdateRequest;
+import com.stdntedu.generated.model.CancelAiExtractionRequest;
+import com.stdntedu.generated.model.RetryAiExtractionRequest;
+import com.stdntedu.generated.model.WrongSource;
 import com.stdntedu.generated.model.ExamCreate;
 import com.stdntedu.generated.model.ExamType;
 import com.stdntedu.generated.model.ExamUpdate;
@@ -37,6 +46,10 @@ import com.stdntedu.generated.model.InlineObject31;
 import com.stdntedu.generated.model.InlineObject5;
 import com.stdntedu.generated.model.InlineObject6;
 import com.stdntedu.generated.model.InlineObject7;
+import com.stdntedu.generated.model.InlineObject8;
+import com.stdntedu.generated.model.InlineObject9;
+import com.stdntedu.generated.model.InlineObject33;
+import com.stdntedu.generated.model.InlineObject34;
 import com.stdntedu.generated.model.InlineObject11;
 import com.stdntedu.generated.model.InlineObject12;
 import com.stdntedu.generated.model.ReviewCreate;
@@ -85,6 +98,8 @@ import com.stdntedu.wrongquestion.service.WrongQuestionService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -102,13 +117,18 @@ public class GeneratedApiController implements DefaultApi {
     private final StudyPlanService studyPlans;
     private final DashboardService dashboard;
     private final AiModelService aiModels;
+    private final AiExtractionService aiExtractions;
+    private final AiExtractionQuestionService extractionQuestions;
+    private final AiExtractionConfirmationService extractionConfirmations;
     private final RequestIdProvider requestIds;
 
     public GeneratedApiController(BaseDataService baseData, StudentService students, AcademicTermService terms,
             ExamService exams, WrongQuestionService wrongQuestions, MasteryService mastery,
             LearningResourceService resources, ResourceHistoryService resourceHistory, StudyLogService studyLogs,
             StudentResourceService studentResources, StudyPlanService studyPlans, DashboardService dashboard,
-            AiModelService aiModels, RequestIdProvider requestIds) {
+            AiModelService aiModels, AiExtractionService aiExtractions,
+            AiExtractionQuestionService extractionQuestions,
+            AiExtractionConfirmationService extractionConfirmations, RequestIdProvider requestIds) {
         this.baseData = baseData;
         this.students = students;
         this.terms = terms;
@@ -122,6 +142,9 @@ public class GeneratedApiController implements DefaultApi {
         this.studyPlans = studyPlans;
         this.dashboard = dashboard;
         this.aiModels = aiModels;
+        this.aiExtractions = aiExtractions;
+        this.extractionQuestions = extractionQuestions;
+        this.extractionConfirmations = extractionConfirmations;
         this.requestIds = requestIds;
     }
 
@@ -461,6 +484,49 @@ public class GeneratedApiController implements DefaultApi {
                 .data(aiModels.testConnection(modelId)));
     }
 
+    @Override public ResponseEntity<InlineObject33> createAiExtractionTask(List<MultipartFile> files,
+            String studentId, WrongSource sourceType, String modelId, String subjectId, String gradeId,
+            String sourceName, String examId, Boolean recognizeAnalysis, Boolean matchKnowledge,
+            Boolean maskPersonalInfo) {
+        var task = aiExtractions.create(files, new CreateExtractionCommand(studentId, subjectId, gradeId,
+                sourceType, sourceName, examId, modelId, Boolean.TRUE.equals(recognizeAnalysis),
+                !Boolean.FALSE.equals(matchKnowledge), Boolean.TRUE.equals(maskPersonalInfo)));
+        return ResponseEntity.accepted().body(taskResponse(task, "ACCEPTED", "accepted"));
+    }
+
+    @Override public ResponseEntity<InlineObject33> getAiExtractionTask(String taskId) {
+        return ResponseEntity.ok(taskResponse(aiExtractions.get(taskId), "OK", "success"));
+    }
+
+    @Override public ResponseEntity<InlineObject8> listAiExtractionQuestions(String taskId) {
+        return ResponseEntity.ok(new InlineObject8().code("OK").message("success").requestId(requestIds.current())
+                .timestamp(OffsetDateTime.now()).data(extractionQuestions.list(taskId)));
+    }
+
+    @Override public ResponseEntity<InlineObject9> updateAiExtractionQuestion(String taskId, String questionId,
+            AiExtractionQuestionUpdateRequest request) {
+        return ResponseEntity.ok(new InlineObject9().code("OK").message("success").requestId(requestIds.current())
+                .timestamp(OffsetDateTime.now()).data(extractionQuestions.update(taskId, questionId, request)));
+    }
+
+    @Override public ResponseEntity<InlineObject34> confirmAiExtractionTask(String taskId, String idempotencyKey,
+            AiConfirm request) {
+        return ResponseEntity.ok(new InlineObject34().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(extractionConfirmations.confirm(taskId, idempotencyKey, request)));
+    }
+
+    @Override public ResponseEntity<InlineObject33> retryAiWrongQuestionExtraction(String taskId,
+            RetryAiExtractionRequest request) {
+        return ResponseEntity.accepted().body(taskResponse(aiExtractions.retry(taskId, request),
+                "ACCEPTED", "accepted"));
+    }
+
+    @Override public ResponseEntity<InlineObject33> cancelAiWrongQuestionExtraction(String taskId,
+            CancelAiExtractionRequest request) {
+        return ResponseEntity.ok(taskResponse(aiExtractions.cancel(taskId, request), "OK", "success"));
+    }
+
     private ResponseEntity<InlineObject1> planResponse(com.stdntedu.generated.model.StudyPlanDto plan) {
         return ResponseEntity.ok(new InlineObject1().code("OK").message("success")
                 .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(plan));
@@ -475,6 +541,11 @@ public class GeneratedApiController implements DefaultApi {
             String code, String message) {
         return new InlineObject6().code(code).message(message).requestId(requestIds.current())
                 .timestamp(OffsetDateTime.now()).data(model);
+    }
+
+    private InlineObject33 taskResponse(com.stdntedu.generated.model.AiTask task, String code, String message) {
+        return new InlineObject33().code(code).message(message).requestId(requestIds.current())
+                .timestamp(OffsetDateTime.now()).data(task);
     }
 
 }

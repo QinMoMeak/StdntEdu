@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 
 import com.stdntedu.ai.model.entity.AiModelEntity;
+import com.stdntedu.ai.extraction.provider.AiExtractionProviderRequest;
+import com.stdntedu.ai.extraction.provider.AiExtractionProviderResult;
 import com.stdntedu.generated.model.AiProtocol;
 import org.springframework.stereotype.Component;
 
@@ -24,5 +26,12 @@ public class AiProviderClientRegistry {
         AiProviderClient client = clients.get(model.getProtocol());
         if (client == null) throw new IllegalStateException("unsupported AI protocol");
         return client.testConnection(model, secret);
+    }
+
+    public AiExtractionProviderResult extract(AiModelEntity model, char[] secret,
+            AiExtractionProviderRequest request) {
+        AiProviderClient client = clients.get(model.getProtocol());
+        if (client == null) throw new IllegalStateException("unsupported AI protocol");
+        return client.extract(model, secret, request);
     }
 }

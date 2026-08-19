@@ -24,6 +24,8 @@
         <mapstruct.version>1.6.3</mapstruct.version>
         <openapi-generator.version>7.10.0</openapi-generator.version>
         <springdoc.version>2.6.0</springdoc.version>
+        <pdfbox.version>3.0.8</pdfbox.version>
+        <twelvemonkeys.version>3.14.0</twelvemonkeys.version>
     </properties>
 
     <dependencies>
@@ -62,6 +64,22 @@
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.twelvemonkeys.imageio</groupId>
+            <artifactId>imageio-webp</artifactId>
+            <version>${twelvemonkeys.version}</version>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>

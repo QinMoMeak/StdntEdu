@@ -3,5 +3,10 @@ spring:
     name: student-growth-baseline
   profiles:
     active: local
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 270MB
+      file-size-threshold: 0B
 app:
   version: 0.2.0-SNAPSHOT

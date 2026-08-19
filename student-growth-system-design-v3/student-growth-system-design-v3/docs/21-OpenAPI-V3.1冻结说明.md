@@ -1,4 +1,76 @@
-# OpenAPI V3.7.0 冻结说明
+# OpenAPI V3.8.0 冻结说明
+
+## V3.8.0 AI Analysis 与 StudyPlan Generation 生命周期
+
+V3.8.0 是 Stage10C/Stage10D 开始前的新契约基线，数据库基线同步升级为 Flyway V20，
+Mastery Algorithm 仍为 V1.0。该版本正式类型化 Analysis 业务、补齐可恢复输入、幂等键、
+生命周期时间、结果快照和查询语义，属于新的 AI Analysis 生命周期能力，不是 patch。
+V1-V19 继续冻结。本轮没有实现 Analysis 业务、Worker、Provider 或 `generateStudyPlan`。
+
+### 类型、归属与输入
+
+1. `AiAnalysisBusinessType` 当前只有 `STUDY_PLAN_GENERATION`，不得预先加入其他分析类型。
+2. `STUDY_PLAN_GENERATION` 必须有 `student_id`，`business_id` 和 `prompt_template_id` 固定为空。
+   生成计划只通过 `study_plan.source_analysis_id=ai_analysis.id` 建立单向权威关系，不维护
+   `analysis.business_id=plan.id` 的重复关系。`student_id` 保持列级 nullable，以保留原始通用
+   Analysis 设计；V20 的当前业务类型 CHECK 负责强制学生非空。
+3. `input_json` 是 Worker 恢复执行的唯一权威业务输入，格式固定为
+   `{"schemaVersion":1,"promptVersion":"study-plan-generation-v1","request":{...}}`。
+   `request` 是完成基础验证后的规范化 `StudyPlanGenerateRequest`，ID 保持字符串、日期使用 ISO，
+   无顺序语义的数组规范化，并固定 null/omitted 规则。它不保存未知字段、HTTP header、requestId、
+   Secret、凭据、storage path 或本机路径。`input_summary` 只保留非权威的人类可读摘要。
+4. V1 不使用数据库 `prompt_template`。Prompt 来自应用内 versioned definition，版本固定为
+   `study-plan-generation-v1`；具体 Prompt 文本在 Stage10D 实现阶段定义，但必须要求 JSON structured
+   output，禁止模型指定状态、version、任意数据库 ID 或绕过 TaskType 关联规则。
+
+### 幂等与状态机
+
+1. `generateStudyPlan` 必须接收公共 `Idempotency-Key` header，长度 8-64。规范化请求使用 UTF-8
+   canonical JSON 与 SHA-256 生成 `request_hash`，不得使用 `toString()`，也不包含 key、header、
+   requestId 或时间戳；Stage10D 应复用 Stage10B 的 canonical JSON/SHA-256 规则。
+2. 唯一键为 `(student_id,business_type,idempotency_key)`。相同 key/hash 返回原 Analysis 当前状态，
+   无论其为 PENDING、RUNNING、SUCCESS 或 FAILED，HTTP 均为 202；相同 key 不同 hash 返回
+   `409 IDEMPOTENCY_CONFLICT`，不得创建第二条记录或第二个计划。
+3. `STUDY_PLAN_GENERATION` 只使用 `PENDING/RUNNING/SUCCESS/FAILED`。合法迁移仅为
+   `PENDING->RUNNING`、`RUNNING->SUCCESS`、`RUNNING->FAILED`；Worker 必须以
+   `UPDATE ... WHERE id=? AND status='PENDING'` claim，影响一行后才拥有执行权，不增加 version。
+4. 数据库沿用 AI 域已有 `started_time/finished_time` 命名，API 暴露 `startedAt/finishedAt`。
+   PENDING 两者和 duration 为空；RUNNING 仅 startedAt 非空；SUCCESS/FAILED 两者及 duration 非空。
+   `durationMs` 是 claim RUNNING 到最终状态的 wall-clock 毫秒，OpenAPI 使用 `int64`，Java 为 `Long`。
+
+### 结果、失败与安全
+
+1. SUCCESS 的 `result_json` 是系统最终接受并持久化的 `StudyPlanDto` JSON 快照，不是 Provider
+   原始 JSON、响应体、Prompt 输出或 CreateRequest。PENDING、RUNNING、FAILED 的 result 均为空。
+2. Provider 输出必须先转换为内部强类型提案，再复用 Stage8B-2 的计划、TaskType 关联、日期范围、
+   学生归属、DRAFT/TODO 初始状态及 version 规则完成校验和创建。AI 输出始终是不可信输入。
+3. Worker 成功阶段在一个事务中创建 StudyPlan/Tasks、设置 `source_analysis_id`、保存最终 DTO 快照、
+   token usage、完成时间和 SUCCESS。任一步失败整体回滚。Provider、解析或领域校验失败只执行
+   RUNNING->FAILED，保存脱敏错误、完成时间和 duration，不创建计划且 result 保持空。
+4. `prompt_tokens/completion_tokens` 只保存 Provider 实际 usage；未返回时为空，不估算 total token。
+   V1 的 `estimated_cost/currency_code` 固定为空，不查询或硬编码价格。
+5. `input_json/result_json/input_summary/error_message` 均不得包含 API Key、Authorization、Secret、
+   password、credential token、本机路径或 Provider 原始响应；继续复用 `SensitiveDataRedactor` 和
+   `ProviderErrorSanitizer`，不创建另一套安全规则。
+
+### 查询与恢复
+
+1. `listAiAnalyses` 默认按 `create_time DESC,id DESC`；时间过滤是
+   `[startTime,endTime)`，即 `create_time>=startTime AND create_time<endTime`，无效范围返回 422。
+2. 当前 businessId 固定为空。仅提供 businessId，或以 `STUDY_PLAN_GENERATION` 搭配非空
+   businessId，均返回 422。studentId 可选且提供时精确过滤；详情按 analysisId 获取。本阶段不在
+   AI 模块局部发明 JWT/currentStudent，访问授权留给未来统一认证。
+3. Stage10D V1 运行模型固定为单应用实例和应用内异步执行器：事务提交 PENDING 后 after-commit
+   提交 Worker，启动时重投 PENDING。启动时可通过条件更新将遗留 RUNNING 恢复为 PENDING；若
+   RUNNING 已存在 `study_plan.source_analysis_id`，属于一致性异常，禁止再次生成计划。
+
+### Flyway V20
+
+V20 只修改 `ai_analysis`，新增列级 nullable、由当前业务类型 CHECK 强制非空的 `input_json`，以及 `idempotency_key`、`request_hash`、
+`started_time`、`finished_time`、幂等唯一键及业务类型、归属、输入 envelope、状态子集、生命周期、
+时间、token 和 V1 cost CHECK。业务表保持 47，`system_config` 保持 31，非 AI 表结构不变。
+迁移无法为任何 V19 存量 Analysis 推导新元数据，因此在 DDL 前检测到记录即失败，不改类型、
+不填假数据、不删除记录；空的 V19 Analysis 表是本次可直接升级的兼容状态。
 
 ## V3.7.0 AI Extraction 资源安全边界
 

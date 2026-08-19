@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -51,8 +52,8 @@ public class GlobalExceptionHandler {
         return body("VALIDATION_ERROR", "request validation failed", HttpStatus.UNPROCESSABLE_ENTITY, request, errors);
     }
 
-    @ExceptionHandler({HttpMessageNotReadableException.class, MissingServletRequestParameterException.class,
-            MethodArgumentTypeMismatchException.class})
+    @ExceptionHandler({HttpMessageNotReadableException.class, MissingRequestHeaderException.class,
+            MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class})
     public ResponseEntity<ApiResponse<ApiResponseFactory.ErrorBody>> badRequest(Exception ex, HttpServletRequest request) {
         return body("BAD_REQUEST", "malformed request", HttpStatus.BAD_REQUEST, request, List.of());
     }

@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -15,6 +16,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Arrays;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +24,7 @@ import java.util.Map;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.MigrationVersion;
+import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.utility.DockerImageName;
@@ -147,6 +150,11 @@ class FlywayMigrationIntegrationTest {
         List<String> configKeysBeforeV19;
         List<String> nonAiSchemaBeforeV19;
         Map<String, Integer> v1ToV18Checksums;
+        List<String> businessTablesBeforeV20;
+        List<String> configKeysBeforeV20;
+        List<String> nonAiSchemaBeforeV20;
+        List<String> aiAnalysisColumnsBeforeV20;
+        Map<String, Integer> v1ToV19Checksums;
 
         try (Connection connection = DriverManager.getConnection(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
@@ -226,17 +234,17 @@ class FlywayMigrationIntegrationTest {
             v1ToV18Checksums = appliedChecksums(v18Flyway, 18);
         }
 
-        Flyway flyway = Flyway.configure()
+        Flyway v19Flyway = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration")
+                .target(MigrationVersion.fromVersion("19"))
                 .load();
-        flyway.migrate();
+        v19Flyway.migrate();
 
         try (Connection connection = DriverManager.getConnection(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
-            assertExecutedVersions(flyway);
-            assertEquals("19", flyway.info().current().getVersion().toString());
-            assertEquals(v1ToV18Checksums, appliedChecksums(flyway, 18));
+            assertEquals("19", v19Flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV18Checksums, appliedChecksums(v19Flyway, 18));
             assertEquals(47, countBusinessTables(connection));
             assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
             assertEquals(configKeysBeforeV19,
@@ -250,6 +258,46 @@ class FlywayMigrationIntegrationTest {
             assertAiV19Definition(connection);
             assertSchemaFullAiV19Matches(connection);
             assertV19MigrationCopiesMatch();
+            businessTablesBeforeV20 = businessTableNames(connection);
+            configKeysBeforeV20 = queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key");
+            nonAiSchemaBeforeV20 = nonAiSchemaSignature(connection);
+            aiAnalysisColumnsBeforeV20 = queryStrings(connection, """
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = DATABASE() AND table_name = 'ai_analysis'
+                    ORDER BY ordinal_position
+                    """);
+            v1ToV19Checksums = appliedChecksums(v19Flyway, 19);
+        }
+
+        Flyway flyway = Flyway.configure()
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .locations("classpath:db/migration")
+                .load();
+        flyway.migrate();
+
+        try (Connection connection = DriverManager.getConnection(
+                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
+            assertExecutedVersions(flyway);
+            assertEquals("20", flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV19Checksums, appliedChecksums(flyway, 19));
+            assertEquals(47, countBusinessTables(connection));
+            assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
+            assertEquals(businessTablesBeforeV20, businessTableNames(connection));
+            assertEquals(configKeysBeforeV20,
+                    queryStrings(connection, "SELECT config_key FROM system_config ORDER BY config_key"));
+            assertEquals(nonAiSchemaBeforeV20, nonAiSchemaSignature(connection));
+            List<String> aiAnalysisColumnsAfterV20 = queryStrings(connection, """
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = DATABASE() AND table_name = 'ai_analysis'
+                    ORDER BY ordinal_position
+                    """);
+            assertTrue(aiAnalysisColumnsAfterV20.containsAll(aiAnalysisColumnsBeforeV20));
+            assertEquals(aiAnalysisColumnsBeforeV20.size() + 5, aiAnalysisColumnsAfterV20.size());
+            assertAiV20Definition(connection);
+            assertSchemaFullAiV20Matches(connection);
+            assertV20MigrationCopiesAndHashesMatch();
         }
     }
 
@@ -562,6 +610,7 @@ class FlywayMigrationIntegrationTest {
             Flyway v19Flyway = Flyway.configure()
                     .dataSource(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())
                     .locations("classpath:db/migration")
+                    .target(MigrationVersion.fromVersion("19"))
                     .load();
             v19Flyway.migrate();
 
@@ -600,6 +649,80 @@ class FlywayMigrationIntegrationTest {
         }
     }
 
+    @Test
+    void rejectsIncompatibleLegacyAnalysisBeforeChangingV19Schema() throws Exception {
+        try (MySQLContainer<?> mysql = new MySQLContainer<>(mysqlImage())
+                .withDatabaseName("student_growth")
+                .withUsername("student_growth")
+                .withPassword("student_growth")) {
+            mysql.start();
+
+            Flyway v19Flyway = Flyway.configure()
+                    .dataSource(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())
+                    .locations("classpath:db/migration")
+                    .target(MigrationVersion.fromVersion("19"))
+                    .load();
+            v19Flyway.migrate();
+
+            List<String> columnsBefore;
+            Map<String, Integer> checksumsBefore = appliedChecksums(v19Flyway, 19);
+            try (Connection connection = DriverManager.getConnection(
+                    mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword());
+                 Statement statement = connection.createStatement()) {
+                statement.executeUpdate("""
+                        INSERT INTO student(id, student_code, name, current_stage_id, current_grade_id)
+                        VALUES (900020, 'V20-LEGACY-STUDENT', 'V20 Legacy Student', 1, 1)
+                        """);
+                statement.executeUpdate("""
+                        INSERT INTO ai_model(
+                            id, name, provider, model_type, model_name, protocol, auth_type, api_base_url,
+                            supports_vision, supports_json, local_flag, enabled, priority_no, timeout_seconds, version)
+                        VALUES (900020, 'V20 Legacy Model', 'OPENAI', 'CHAT', 'legacy-chat',
+                                'OPENAI_COMPATIBLE', 'BEARER_API_KEY', 'https://ai.example.test/v1',
+                                0, 1, 0, 1, 50, 90, 0)
+                        """);
+                statement.executeUpdate("""
+                        INSERT INTO ai_analysis(
+                            id, student_id, business_type, business_id, ai_model_id, status, input_summary)
+                        VALUES (900020, 900020, 'AI_BASELINE', 900020, 900020, 'PENDING', 'legacy input')
+                        """);
+                columnsBefore = columnDefinitions(connection, "ai_analysis");
+            }
+
+            Flyway v20Flyway = Flyway.configure()
+                    .dataSource(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())
+                    .locations("classpath:db/migration")
+                    .load();
+            assertThrows(FlywayException.class, v20Flyway::migrate);
+
+            try (Connection connection = DriverManager.getConnection(
+                    mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())) {
+                assertEquals(List.of("19"), queryStrings(connection, """
+                        SELECT version FROM flyway_schema_history
+                        WHERE success = 1
+                        ORDER BY installed_rank DESC LIMIT 1
+                        """));
+                assertEquals(1, queryInt(connection, """
+                        SELECT COUNT(*) FROM flyway_schema_history
+                        WHERE version = '20' AND success = 0
+                        """));
+                assertEquals(checksumsBefore, appliedChecksums(v20Flyway, 19));
+                assertEquals(columnsBefore, columnDefinitions(connection, "ai_analysis"));
+                assertEquals(1, queryInt(connection, """
+                        SELECT COUNT(*) FROM ai_analysis
+                        WHERE id = 900020 AND student_id = 900020 AND business_type = 'AI_BASELINE'
+                          AND business_id = 900020 AND ai_model_id = 900020 AND status = 'PENDING'
+                          AND input_summary = 'legacy input'
+                        """));
+                assertEquals(0, queryInt(connection, """
+                        SELECT COUNT(*) FROM information_schema.columns
+                        WHERE table_schema = DATABASE() AND table_name = 'ai_analysis'
+                          AND column_name IN ('input_json','idempotency_key','request_hash','started_time','finished_time')
+                        """));
+            }
+        }
+    }
+
     private void assertExecutedVersions(Flyway flyway) {
         List<String> versions = Arrays.stream(flyway.info().applied())
                 .map(MigrationInfo::getVersion)
@@ -607,7 +730,7 @@ class FlywayMigrationIntegrationTest {
                 .toList();
 
         assertEquals(
-                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"),
+                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"),
                 versions);
     }
 
@@ -1286,6 +1409,59 @@ class FlywayMigrationIntegrationTest {
         assertEquals(47, countBusinessTables(connection));
     }
 
+    private void assertAiV20Definition(Connection connection) throws SQLException {
+        assertEquals(List.of("bigint|YES|<NULL>"),
+                columnDefinition(connection, "ai_analysis", "student_id"));
+        assertEquals(List.of("json|YES|<NULL>"),
+                columnDefinition(connection, "ai_analysis", "input_json"));
+        assertEquals(List.of("varchar(64)|NO|<NULL>"),
+                columnDefinition(connection, "ai_analysis", "idempotency_key"));
+        assertEquals(List.of("char(64)|NO|<NULL>"),
+                columnDefinition(connection, "ai_analysis", "request_hash"));
+        assertEquals(List.of("datetime(3)|YES|<NULL>"),
+                columnDefinition(connection, "ai_analysis", "started_time"));
+        assertEquals(List.of("datetime(3)|YES|<NULL>"),
+                columnDefinition(connection, "ai_analysis", "finished_time"));
+
+        assertUniqueIndexColumns(connection, "ai_analysis", "uk_aa_idempotency",
+                List.of("student_id", "business_type", "idempotency_key"));
+        for (String constraint : List.of(
+                "chk_aa_business_type_v20", "chk_aa_study_plan_identity_v20",
+                "chk_aa_idempotency_key_v20", "chk_aa_request_hash_v20",
+                "chk_aa_input_json_v20", "chk_aa_status_subset_v20",
+                "chk_aa_lifecycle_v20", "chk_aa_timing_v20",
+                "chk_aa_token_usage_v20", "chk_aa_cost_v1_v20")) {
+            assertConstraint(connection, "ai_analysis", constraint, "CHECK");
+        }
+        assertCheckContains(connection, "chk_aa_business_type_v20", List.of("STUDY_PLAN_GENERATION"));
+        assertCheckContains(connection, "chk_aa_study_plan_identity_v20",
+                List.of("STUDY_PLAN_GENERATION", "student_id", "business_id", "prompt_template_id", "input_json"));
+        assertCheckContains(connection, "chk_aa_input_json_v20",
+                List.of("schemaVersion", "promptVersion", "study-plan-generation-v1", "request"));
+        assertCheckContains(connection, "chk_aa_status_subset_v20",
+                List.of("PENDING", "RUNNING", "SUCCESS", "FAILED"));
+        assertCheckContains(connection, "chk_aa_lifecycle_v20",
+                List.of("started_time", "finished_time", "duration_ms", "result_json", "error_code"));
+        assertCheckContains(connection, "chk_aa_cost_v1_v20", List.of("estimated_cost", "currency_code"));
+    }
+
+    private void assertSchemaFullAiV20Matches(Connection connection) throws Exception {
+        String analysis = Files.readAllLines(Path.of("database", "schema-full.sql")).stream()
+                .filter(line -> line.startsWith("CREATE TABLE ai_analysis("))
+                .findFirst().orElseThrow();
+        for (String token : List.of(
+                "input_json JSON NULL", "idempotency_key VARCHAR(64) NOT NULL",
+                "request_hash CHAR(64) NOT NULL", "started_time DATETIME(3)",
+                "finished_time DATETIME(3)", "uk_aa_idempotency",
+                "chk_aa_business_type_v20", "STUDY_PLAN_GENERATION",
+                "chk_aa_study_plan_identity_v20", "study-plan-generation-v1",
+                "chk_aa_status_subset_v20", "chk_aa_lifecycle_v20",
+                "chk_aa_timing_v20", "chk_aa_token_usage_v20", "chk_aa_cost_v1_v20")) {
+            assertTrue(analysis.contains(token));
+        }
+        assertEquals(47, countBusinessTables(connection));
+    }
+
     private List<String> columnDefinitions(Connection connection, String tableName) throws SQLException {
         return queryStrings(connection, """
                 SELECT CONCAT_WS('|', column_name, column_type, is_nullable,
@@ -1330,6 +1506,18 @@ class FlywayMigrationIntegrationTest {
                 Files.readAllBytes(Path.of("database", "flyway", "V19__complete_ai_foundation.sql")),
                 Files.readAllBytes(Path.of("src", "main", "resources", "db", "migration",
                         "V19__complete_ai_foundation.sql")));
+    }
+
+    private void assertV20MigrationCopiesAndHashesMatch() throws Exception {
+        Path design = Path.of("database", "flyway", "V20__complete_ai_analysis_lifecycle.sql");
+        Path runtime = Path.of("src", "main", "resources", "db", "migration",
+                "V20__complete_ai_analysis_lifecycle.sql");
+        assertArrayEquals(Files.readAllBytes(design), Files.readAllBytes(runtime));
+        assertEquals(sha256(design), sha256(runtime));
+    }
+
+    private String sha256(Path path) throws Exception {
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
     }
 
     private List<String> studyLogColumnSignature(Connection connection, String tableName) throws SQLException {

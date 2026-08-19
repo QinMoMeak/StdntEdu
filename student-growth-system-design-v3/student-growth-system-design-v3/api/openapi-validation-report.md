@@ -1,4 +1,48 @@
-# OpenAPI V3.7.0 验证报告
+# OpenAPI V3.8.0 验证报告
+
+## V3.8.0 AI Analysis 与 StudyPlan Generation 生命周期闭环
+
+V3.8.0 将当前唯一公开分析类型冻结为 `STUDY_PLAN_GENERATION`，并把异步计划生成所需的输入快照、幂等键、请求哈希、开始/结束时间和结果快照纳入正式契约。Flyway V20 只修改 `ai_analysis`，业务表数量保持 47，`system_config` 保持 31。
+
+- `AiAnalysisBusinessType` 当前仅包含 `STUDY_PLAN_GENERATION`；该类型要求 `studentId` 非空、`businessId` 为空、`promptTemplateId` 为空。
+- `input_json` 保存 `schemaVersion=1`、`promptVersion=study-plan-generation-v1` 和规范化 `StudyPlanGenerateRequest`；不得保存凭据、HTTP 头、本机路径或 Provider 原始响应。
+- `generateStudyPlan` 复用公共必填 `Idempotency-Key` Header。请求哈希为规范化业务请求的 UTF-8 canonical JSON SHA-256，不包含幂等键、HTTP 头、requestId 或时间戳。
+- 唯一约束为 `(student_id, business_type, idempotency_key)`。相同键和相同哈希返回原 Analysis 当前状态并保持 202；相同键但不同哈希返回 409 `IDEMPOTENCY_CONFLICT`。
+- V1 状态子集为 `PENDING -> RUNNING -> SUCCESS|FAILED`。PENDING 的开始/结束/耗时均为空；RUNNING 仅开始时间非空；终态要求开始时间、结束时间和非负 `durationMs`。
+- `result_json` 在 SUCCESS 时保存最终 `StudyPlanDto` 快照，其他状态为空。SUCCESS 的 StudyPlan、Tasks、`source_analysis_id`、结果快照和 Analysis 终态必须在同一事务提交；FAILED 不创建计划，只保存脱敏错误。
+- Token 仅保存 Provider 实际返回值；未返回时保持空。V1 不估算费用，`estimated_cost` 和 `currency_code` 均为空。
+- `listAiAnalyses` 默认按 `create_time DESC, id DESC`；时间过滤为 `[startTime,endTime)`，非法区间返回 422。当前类型不接受 `businessId` 过滤，单独提供 `businessId` 或为该类型提供非空值均返回 422。
+- Worker 的唯一权威恢复输入是 `input_json`。单实例重启可通过条件更新将遗留 RUNNING 恢复为 PENDING；若已存在 `study_plan.source_analysis_id=analysis.id`，属于一致性异常，不得重复生成。
+- `durationMs` 从 OpenAPI `int32` 修正为 `int64`，Java 生成类型为 `Long`，TypeScript 为 `number`；`startedAt`、`finishedAt` 生成 Java `OffsetDateTime`。
+
+## V20 迁移验证
+
+- 两份迁移文件 SHA-256 均为 `D029A9D2880FF55272AD535B228395948A5D87BB7F647D97D4441923674C619F`，内容逐字一致。
+- 空 V19 数据库可升级到 V20；最终版本为 v20，业务表仍为 47，`system_config` 仍为 31。
+- 新增列为 `input_json`、`idempotency_key`、`request_hash`、`started_time`、`finished_time`；`input_json` 保持列级 nullable，并由当前业务类型 CHECK 强制非空；时间列采用现有 AI 任务的 `started_time`/`finished_time` 命名规范。
+- V20 增加业务类型、输入 envelope、请求哈希、生命周期、结果/错误、时间、Token 和费用一致性 CHECK，以及幂等唯一索引。
+- V19 存在任何旧 `ai_analysis` 记录时迁移在 ALTER 前停止，避免猜测 student、业务类型、输入或幂等信息；回归测试确认旧记录及 V19 表结构不被静默篡改。
+- `schema-full.sql` 已只同步 V20 后的 `ai_analysis` 结构；非 AI 表结构签名不变，V1-V19 已应用 checksum 不变。
+- `FlywayMigrationIntegrationTest` 独立运行 6 项全部通过，failures 0、errors 0、skipped 0。
+
+## V3.8.0 校验与生成
+
+- OpenAPI 3.1.0，`info.version=3.8.0`，文件 795 行。
+- 结构统计：paths 86、operations 116、schemas 157、Response 组件 70、Parameter 组件 21；operationId 116/116/0。
+- Swagger CLI：通过；Redocly recommended lint：errors 0、warnings 0。
+- OpenAPI Generator CLI 7.10.0 JAR validate：通过；仅保留 4 个既有未使用模型建议。
+- Java client、TypeScript Fetch 和 Maven Spring generation：均通过。生成的 `generateStudyPlan` 显式包含必填 `String idempotencyKey`；77 个 Path Variable 均有显式 Java `String @PathVariable`，缺口 0。
+- `AiAnalysisDto` 生成抽查：Java 为 `String studentId`、`AiAnalysisBusinessType businessType`、`StudyPlanDto result`、`Long durationMs`、`OffsetDateTime startedAt/finishedAt`；TypeScript 对应 `string`、枚举、`StudyPlanDto`、`number` 和日期类型。
+
+## V3.8.0 回归兼容修复
+
+既有 Stage8 的未实现接口测试已按 V3.8.0 契约发送合法 `Idempotency-Key`，继续确认 `generateStudyPlan` 返回 501，未实现成功结果。另增加独立缺失 Header 场景，确认 Spring 实际抛出的 `MissingRequestHeaderException` 由统一异常处理映射为 `400 BAD_REQUEST`，响应保留统一 ErrorResponse、空 `fieldErrors` 和一致 requestId，不暴露 Spring 原始异常文本。
+
+- `StageEightB2IntegrationTest`：19 项通过；合法 Header 返回 501，缺失 Header 返回统一 400。
+- `StageTenBAiExtractionIntegrationTest`：13 项通过；confirm 的同键重放、异载荷冲突和原子事务语义不变。
+- `mvnw.cmd clean test`：tests 273、failures 0、errors 0、skipped 0，BUILD SUCCESS。
+- `mvnw.cmd clean package`：tests 273、failures 0、errors 0、skipped 0，可执行 Spring Boot JAR 打包成功。
+- OpenAPI V3.8.0、Flyway V1-V20、schema-full、Mastery、Extraction 业务、Dashboard 与 `generateStudyPlan` 实现均未因该兼容修复改变。
 
 ## V3.7.0 AI Extraction 上传与视觉解码资源边界
 

@@ -421,10 +421,26 @@ class StageEightB2IntegrationTest {
                 "target/generated-sources/openapi/src/main/java/com/stdntedu/generated/api/DefaultApi.java"));
         assertThat(generatedApi).contains("@PathVariable(\"planId\") String planId")
                 .contains("@PathVariable(\"taskId\") String taskId");
-        mvc.perform(post("/api/v1/study-plans/generate").contentType("application/json")
+        mvc.perform(post("/api/v1/study-plans/generate")
+                        .header("Idempotency-Key", "stage8-generate-not-implemented-001")
+                        .contentType("application/json")
                         .content("{\"studentId\":\"1\",\"startDate\":\"2026-09-01\",\"endDate\":\"2026-09-30\","+
                                 "\"dailyAvailableMinutes\":60,\"modelId\":\"1\"}"))
                 .andExpect(status().isNotImplemented());
+    }
+
+    @Test void generateStudyPlanWithoutIdempotencyKeyUsesUnifiedBadRequest() throws Exception {
+        mvc.perform(post("/api/v1/study-plans/generate")
+                        .header("X-Request-ID", "stage8-missing-idempotency-key")
+                        .contentType("application/json")
+                        .content("{\"studentId\":\"1\",\"startDate\":\"2026-09-01\",\"endDate\":\"2026-09-30\","+
+                                "\"dailyAvailableMinutes\":60,\"modelId\":\"1\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string("X-Request-ID", "stage8-missing-idempotency-key"))
+                .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+                .andExpect(jsonPath("$.message").value("malformed request"))
+                .andExpect(jsonPath("$.requestId").value("stage8-missing-idempotency-key"))
+                .andExpect(jsonPath("$.data.fieldErrors").isArray());
     }
 
     private StudyPlanDto activePlan() {

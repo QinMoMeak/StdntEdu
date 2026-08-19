@@ -1,5 +1,5 @@
 openapi: 3.1.0
-info: {title: Student Growth Archive API, version: 3.6.0, license: {name: MIT, identifier: MIT}}
+info: {title: Student Growth Archive API, version: 3.7.0, license: {name: MIT, identifier: MIT}}
 servers: [{url: /api/v1}]
 security: [{bearerAuth: []}]
 paths:
@@ -208,21 +208,45 @@ paths:
         客户端可按 multipart 文件顺序上传 JPEG、PNG、WEBP 和 PDF。AiInputType 表示客户端原始输入组成，
         不表示 Provider transport；PDF 即使已转换为页面图片，任务 inputType 仍为 PDF 或 MIXED。
 
-        创建任务前必须完成文件 preflight：验证真实 MIME/magic、文件可解析、PDF 非加密且无需密码、
-        PDF pageCount >= 1，并计算整个任务的 normalized visual units。损坏、不可解析、加密、需要密码
-        或 0 页 PDF 返回 422 BUSINESS_RULE_VIOLATION，且不得创建业务 Attachment、Extraction Task 或临时题；
-        若实现需要临时写盘，失败时必须清理临时文件。
+        请求必须依次且独立满足六层容量限制：(L1) 文件数 <=20；(L2) 图片单文件 <=15 MB、PDF
+        单文件 <=50 MB；(L3) 所有上传文件原始字节之和 <=268435456 bytes（256 MiB，不含 multipart
+        boundary/header）；(L4) normalized visual units <=20；(L5) 每个最终解码或渲染 visual 的
+        width <=8192、height <=8192 且 width*height <=16000000；(L6) 发送给 Provider 的全部 normalized
+        image binary 在 Base64 前合计 <=134217728 bytes（128 MiB）。满足后层不得替代前层校验。
+
+        创建任务前必须完成文件 preflight：验证真实 MIME/magic、文件可解析，并在完整 decode 前通过
+        ImageReader 或等价安全 metadata API 读取 JPEG/PNG/WEBP 的 width 和 height；宽高与乘积必须
+        使用 long 校验。静态 lossy、lossless 和 alpha WebP 支持，但 animated WebP（frame count >1
+        或 animation flag=true）返回 422 BUSINESS_RULE_VIOLATION，禁止选取、合成或拆分帧，且不得创建
+        Attachment、Extraction Task 或临时题。
+
+        PDF preflight 必须确认非加密且无需密码、pageCount >=1，并在 renderImageWithDPI 前按每页
+        CropBox 和 page rotation 计算 150 DPI raster。每一边使用
+        ceil(effectivePoints / 72 * 150)，90/270 度交换有效宽高；计算采用 finite double 和 long，结果
+        必须大于 0 并满足 8192/16000000 限制。损坏、不可解析、加密、需要密码或 0 页 PDF 返回
+        422 BUSINESS_RULE_VIOLATION；尺寸超限返回 413 PAYLOAD_TOO_LARGE。失败时不得创建业务记录，
+        临时文件必须清理。
 
         Normalized visual unit 的计算规则为：每个 JPEG/PNG/WEBP 文件计 1 unit，每个 PDF 页面计 1 unit，
         MIXED 为图片数量加全部 PDF 页数。单任务上传文件数和 normalized visual units 均不得超过 20；
         任一上限超出均返回 413 PAYLOAD_TOO_LARGE。图片单文件最大 15 MB，PDF 单文件最大 50 MB，
-        文件大小限制与 visual unit 限制独立生效。
+        文件大小、原始上传总量、visual unit、解码尺寸和 normalized binary 限制独立生效。单 visual
+        的 estimatedRasterWorkingSet 固定按 decodedPixels*8 bytes 预算且不得超过 128 MiB；禁止依赖
+        OutOfMemoryError 作为输入校验。
 
         Provider 永远不接收原始 PDF。PDF 按原页序使用安全的本地 renderer 渲染为 RGB 页面图片，
         基准为 150 DPI、JPEG quality 0.92；应用 PDF page rotation，但不得 OCR、提取 text layer、
         重排页面、跳过空白页、访问脚本、远程 URL 或外部网络资源。渲染图仅作为临时 Provider 输入，
         不创建 Attachment、不持久化、不返回客户端，并在处理结束后释放；原始 PDF Attachment 正常保留。
-        WEBP 在 Provider 调用前解码并归一化为 PNG 或 JPEG，不依赖 Provider 自身的 WEBP 支持。
+        静态 WEBP 在 Provider 调用前解码并固定归一化为 PNG，以保留 alpha 并避免二次有损压缩；不依赖
+        Provider 原生 WEBP 支持。Derived PNG/JPEG 不改变 task.inputType。
+
+        Normalized binary 按实际 Provider image bytes 在 Base64 前累计：JPEG 使用实际发送 bytes，PNG
+        使用实际发送 bytes，WEBP 使用归一化 PNG bytes，PDF 使用 150 DPI/quality 0.92 页面 JPEG bytes。
+        一旦累计超过 134217728 bytes，立即停止后续 normalization、清理 transient artifacts 并返回
+        413，不得降 DPI、降 quality、丢页、改格式、chunk 或发起 Provider 调用。Base64 和 JSON 大小
+        不计入该 128 MiB 业务值；Adapter 应流式 Base64/HTTP body，禁止为计算限制先构造完整 Base64
+        String 和完整 JSON String。
 
         Provider visual input 严格保持 multipart 顺序，每个 PDF 在原文件位置展开为 page 1..N，
         不按 MIME 或文件名重排。一个 Extraction Task 默认只进行一次 Provider extraction 请求，
@@ -235,11 +259,13 @@ paths:
         OLLAMA 使用 POST {baseUrl}/api/chat，请求 model=modelName、stream=false，user message 的 content
         为 extraction prompt，images 为 normalized image bytes 的纯 base64 数组，不含 data URL 前缀。
         可使用 format=json 或官方 JSON schema structured output，但 Adapter 必须返回内部强类型结果，
-        不得把 Provider 原始 JSON直接传给 Service。
+        不得把 Provider 原始 JSON 直接传给 Service。
 
         Provider 因 payload、图片、多模态、context limit 或协议问题拒绝请求时，整个任务失败；不得自动
         减少页面、降低 DPI、丢弃输入、OCR、分批或切换协议。Preflight 后发生页面渲染失败同样令任务
-        FAILED，不得保存部分临时题。Prompt 不得包含服务器存储路径、Secret、API Key 或无关学生数据。
+        FAILED，不得保存部分临时题。413 适用于文件数/大小、原始上传总量、visual units、解码宽高/
+        像素和 normalized binary 超限；422 适用于损坏/加密/密码/零页 PDF 与 animated WebP；不支持的
+        MIME 返回 415。Prompt 不得包含服务器存储路径、Secret、API Key 或无关学生数据。
       requestBody:
         required: true
         content:
@@ -254,8 +280,10 @@ paths:
                   maxItems: 20
                   description: |
                     支持 JPEG、PNG、WEBP 和 PDF。图片单文件最大 15 MB，PDF 单文件最大 50 MB，
-                    单任务最多 20 个文件；同时按图片数加 PDF 总页数计算 normalized visual units，
-                    总数不得超过 20。文件顺序决定 Provider visual input 顺序，PDF 在原位置按页展开。
+                    单任务最多 20 个文件，原始文件字节总和最多 256 MiB；同时按图片数加 PDF 总页数
+                    计算 normalized visual units，总数不得超过 20。每个解码 visual 最大 8192x8192 且
+                    不超过 16000000 pixels，Provider normalized binary 总计最多 128 MiB。Animated WebP
+                    不受支持。文件顺序决定 Provider visual input 顺序，PDF 在原位置按页展开。
                   items: {type: string, format: binary}
                 studentId: {$ref: '#/components/schemas/Id'}
                 subjectId: {type: [string,'null']}

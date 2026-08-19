@@ -1,4 +1,64 @@
-# OpenAPI V3.6.0 冻结说明
+# OpenAPI V3.7.0 冻结说明
+
+## V3.7.0 AI Extraction 资源安全边界
+
+V3.7.0 是阶段十B开始前的新契约基线。本次只收窄 AI Extraction 上传、视觉解码和 Provider
+归一化输入的资源边界，不新增路径、operationId、Schema、字段或数据库结构。由于部分此前可接受
+的输入现在会被拒绝，本次是 minor 版本升级，不作为 V3.6.x 兼容性 patch。
+
+### 六层独立限制
+
+1. 单任务上传文件数最多 20。
+2. 图片单文件最大 15 MB，PDF 单文件最大 50 MB。
+3. 全部原始上传文件字节之和最大 268435456 bytes（256 MiB），不含 multipart boundary/header。
+4. Normalized visual units 最多 20，仍按每张图片和每个 PDF 页面各 1 unit 计算。
+5. 每个最终解码或渲染 visual 的宽、高分别不超过 8192，且总像素不超过 16000000。
+6. 发送给 Provider 的全部 normalized image binary 在 Base64 前合计不超过 134217728 bytes
+   （128 MiB）。Base64 和 JSON 膨胀不计入该业务值。
+
+六层限制必须分别校验，通过后层不得替代前层。超出任一容量限制均返回 413
+`PAYLOAD_TOO_LARGE`，不得通过降 DPI、降质量、丢页、改格式、拆批或切换 Provider 绕过。
+
+### 图片与 PDF Preflight
+
+1. JPEG、PNG 和 WEBP 必须在完整 decode 前使用 `ImageReader` 或等价安全 metadata API 读取
+   width、height；宽高和 `width * height` 使用 `long` 校验。单 visual 的 raster working set
+   固定按 `decodedPixels * 8 bytes` 预算且不得超过 128 MiB，不得依赖 `OutOfMemoryError` 校验输入。
+2. PDF 必须先验证非加密、无需密码且至少 1 页。每页按 CropBox 和 page rotation 计算 150 DPI
+   raster：每一边为 `ceil(effectivePoints / 72 * 150)`，90/270 度交换有效宽高；中间计算使用
+   finite double 和 long，结果必须大于 0，再执行与图片相同的 8192/16000000 限制。
+3. PDF 只允许本地安全解析和页面渲染，不执行 JavaScript、URI action、下载、外部资源访问或
+   embedded executable；原始 PDF 永远不发送给 Provider。
+4. Static lossy、lossless 和 alpha WebP 均支持，并在 Provider 调用前固定归一化为 PNG。
+   Animated WebP（frame count > 1 或 animation flag=true）返回 422
+   `BUSINESS_RULE_VIOLATION`；不得选择、合成或拆分帧，也不得创建业务记录。
+
+### Provider Payload 与清理
+
+Normalized binary 是实际发送给 Provider 的图片字节累计值：JPEG/PNG 使用实际发送 bytes，
+WEBP 使用归一化 PNG bytes，PDF 使用 150 DPI、quality 0.92 的页面 JPEG bytes。超过 128 MiB
+时立即停止后续归一化，清理 transient artifacts，返回 413 且不得发起 Provider 调用。Adapter
+必须流式执行 Base64 和 HTTP body，禁止先构造完整 Base64 String 与完整 JSON String。
+
+任务使用隔离的临时目录。成功、校验失败、Provider 失败、取消、超时和异常退出都必须清理
+派生 PNG/JPEG 和其他瞬时文件；这些文件不创建 Attachment、不写数据库、不暴露路径。
+
+### 错误语义与实现约束
+
+- 413：文件数、单文件大小、原始文件总量、visual units、宽高/像素或 normalized binary 超限。
+- 422：损坏或不可解析输入、加密/密码保护/零页 PDF、animated WebP 及其他业务校验失败。
+- 415：真实 MIME/magic 不属于 JPEG、PNG、WEBP 或 PDF。
+
+后续实现的 Spring multipart 基础设施配置应使用 `max-file-size=50MB`、
+`max-request-size=270MB`、`file-size-threshold=0`。270 MB 只是覆盖 multipart overhead 的传输层
+包络，256 MiB 原始文件总量仍由业务层按实际文件字节独立校验，并通过配置绑定测试固定单位。
+
+依赖候选冻结为 PDFBox 3.0.8（Apache-2.0）和 TwelveMonkeys ImageIO WebP 3.14.0
+（BSD-3-Clause）。如可靠拒绝公钥加密 PDF 确实需要 Bouncy Castle，只能在依赖与许可证审计后
+按最小范围引入，不把它冻结为本次 API 依赖。
+
+V3.7.0 没有数据库迁移。Flyway 仍为 V19，业务表仍为 47，`system_config` 仍为 31；本轮不创建
+V20，不修改 `pom.xml`、application 配置、Java 源码或测试，也不开始 Stage10B 业务实现。
 
 ## V3.6.0 AI Extraction Visual Input
 

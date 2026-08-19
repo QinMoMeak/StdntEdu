@@ -1,4 +1,51 @@
-# OpenAPI V3.6.0 验证报告
+# OpenAPI V3.7.0 验证报告
+
+## V3.7.0 AI Extraction 上传与视觉解码资源边界
+
+V3.7.0 在 V3.6.0 的视觉输入语义上增加可执行的资源安全边界。它不新增、删除或重命名路径、
+operationId、Schema、字段或枚举；由于限制收窄，本次是 minor 版本升级，不是兼容性 patch。
+
+- 六层限制独立生效：文件数 20、图片 15 MB/PDF 50 MB、原始文件合计 256 MiB、visual units 20、
+  单 visual 宽高 8192 且像素 16000000、Provider normalized binary 128 MiB（Base64 前）。
+- 图片在完整 decode 前读取 metadata，宽高、像素乘法和 raster working set 使用 long；单 visual
+  working set 按 `pixels * 8` 且不超过 128 MiB。
+- PDF 使用 CropBox 与 rotation，在 render 前按 `ceil(effectivePoints / 72 * 150)` 计算各边；
+  90/270 度交换有效宽高，double 必须 finite 且最终 long 结果大于 0。
+- Static lossy/lossless/alpha WebP 支持并固定归一化为 PNG；animated WebP 返回 422 且不创建
+  Attachment、Task 或临时题。
+- 原始上传合计只统计文件 bytes，不含 multipart overhead。后续 Spring 配置应为单文件 50 MB、
+  请求 270 MB、磁盘阈值 0；业务层仍独立执行 256 MiB 限制。
+- Provider normalized binary 按实际发送 JPEG/PNG、WebP 派生 PNG 和 PDF 页面 JPEG 的 bytes
+  累计，超过 128 MiB 时返回 413、清理临时产物且不调用 Provider。Base64/JSON 膨胀不计入限值，
+  Adapter 必须流式编码和发送。
+- 413、422、415 分别固定为容量超限、内容/业务不可接受和 MIME 不支持。任务隔离临时目录必须在
+  成功、失败、取消、超时和异常路径清理。
+- 实现依赖候选为 PDFBox 3.0.8（Apache-2.0）和 TwelveMonkeys ImageIO WebP 3.14.0
+  （BSD-3-Clause）；Bouncy Castle 仅在可靠拒绝公钥加密 PDF 必需且审计通过后才可最小引入。
+- PDF 解析限定为本地安全解析，不执行脚本、URI、下载、外部资源或嵌入程序。
+
+## V3.7.0 校验与生成结果
+
+- OpenAPI 文件：3.1.0 规范，`info.version=3.7.0`，794 行。
+- 结构统计：86 个路径模板、116 个操作、156 个 Schema、70 个 Response 组件、21 个 Parameter
+  组件；operationId 为 116/116/0。
+- Path Variable 审计：规范内 77 处路径变量全部声明且 `required: true`；Maven Spring 生成接口
+  的 77 处变量全部生成显式 `String @PathVariable` 参数，缺口为 0。
+- Swagger CLI：通过，exit 0。
+- Redocly recommended lint：通过，exit 0，errors 0、warnings 0。系统 Node 24 首次运行在完成
+  有效校验后于 Windows libuv 退出阶段 assertion；使用 Codex bundled Node 24.19.0 重跑得到 exit 0。
+- OpenAPI Generator CLI 7.10.0 JAR validate：通过，exit 0；保留 4 个既有未使用模型建议：
+  `Error`、`ResourceCreateRequest`、`ResourceUpdateRequest`、`AiExtractionConfirmResultDto`。
+- Java client model generation：通过，exit 0；TypeScript Fetch generation：通过，exit 0。既有
+  inline model 与 TypeScript 保留字重命名提示未造成解析或生成失败。
+- Maven Spring generation：通过；`createAiExtractionTask` 保持既有 multipart 参数，不新增公开
+  visual limit DTO，全部资源边界由操作 description 冻结。
+- `mvnw.cmd clean test`：通过，tests 217、failures 0、errors 0、skipped 0。
+- `mvnw.cmd clean package`：通过，tests 217、failures 0、errors 0、skipped 0，可执行 JAR 打包成功。
+- Testcontainers MySQL 8 从空库成功执行 V1-V19，最终版本 v19；Flyway 回归断言确认业务表 47，
+  `system_config` 31。
+- 数据库、Flyway V1-V19、Java 业务源码、测试源码、`pom.xml`、application 配置和 Mastery
+  Algorithm 均未修改；本轮未创建 V20，也未开始 Stage10B。
 
 ## V3.6.0 AI Extraction 视觉输入与 PDF 归一化
 

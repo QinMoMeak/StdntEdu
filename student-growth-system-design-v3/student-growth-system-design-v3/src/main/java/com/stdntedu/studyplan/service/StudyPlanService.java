@@ -8,6 +8,9 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import com.stdntedu.common.exception.BusinessException;
 import com.stdntedu.common.exception.ResourceNotFoundException;
@@ -89,6 +92,17 @@ public class StudyPlanService {
 
     @Transactional
     public StudyPlanDto create(StudyPlanCreateRequest request) {
+        return createInternal(request, null);
+    }
+
+    @Transactional
+    public StudyPlanDto createFromAnalysis(Long analysisId, StudyPlanCreateRequest request) {
+        if (analysisId == null) throw rule("source analysis is required");
+        if (plans.countBySourceAnalysisId(analysisId) > 0) throw rule("analysis already created a study plan");
+        return createInternal(request, analysisId);
+    }
+
+    private StudyPlanDto createInternal(StudyPlanCreateRequest request, Long sourceAnalysisId) {
         Long studentId = ids.toLong(request.getStudentId());
         requireStudent(studentId);
         validateDateRange(request.getStartDate(), request.getEndDate());
@@ -100,14 +114,17 @@ public class StudyPlanService {
         plan.setStartDate(request.getStartDate());
         plan.setEndDate(request.getEndDate());
         plan.setStatus(StudyPlanStatus.DRAFT);
+        plan.setSourceAnalysisId(sourceAnalysisId);
         plan.setDailyAvailableMinutes(request.getDailyAvailableMinutes());
         plan.setDescription(request.getDescription());
         plan.setDeleted(false);
         plan.setVersion(1);
         plans.insert(plan);
 
-        for (StudyPlanTaskCreateRequest item : safe(request.getTasks())) {
-            StudyPlanTaskEntity task = newTask(plan, item);
+        List<StudyPlanTaskCreateRequest> taskRequests = safe(request.getTasks());
+        List<TaskLinks> taskLinks = validateLinks(plan, taskRequests);
+        for (int index = 0; index < taskRequests.size(); index++) {
+            StudyPlanTaskEntity task = newTask(plan, taskRequests.get(index), taskLinks.get(index));
             tasks.insert(task);
         }
         return getById(plan.getId());
@@ -269,9 +286,12 @@ public class StudyPlanService {
     }
 
     private StudyPlanTaskEntity newTask(StudyPlanEntity plan, StudyPlanTaskCreateRequest request) {
+        return newTask(plan, request, validateLinks(plan, request.getTaskType(), request.getResourceId(),
+                request.getWrongQuestionId(), request.getKnowledgeId(), request.getExamId()));
+    }
+
+    private StudyPlanTaskEntity newTask(StudyPlanEntity plan, StudyPlanTaskCreateRequest request, TaskLinks links) {
         validateTaskDate(plan, request.getTaskDate());
-        TaskLinks links = validateLinks(plan, request.getTaskType(), request.getResourceId(),
-                request.getWrongQuestionId(), request.getKnowledgeId(), request.getExamId());
         StudyPlanTaskEntity task = new StudyPlanTaskEntity();
         task.setStudyPlanId(plan.getId());
         task.setTaskDate(request.getTaskDate());
@@ -293,46 +313,92 @@ public class StudyPlanService {
 
     private TaskLinks validateLinks(StudyPlanEntity plan, StudyPlanTaskType type, String resourceId,
             String wrongQuestionId, String knowledgeId, String examId) {
+        TaskLinks links = parseLinks(type, resourceId, wrongQuestionId, knowledgeId, examId);
+        if (links.wrongQuestionId() != null) {
+            WrongQuestionEntity item = wrongQuestions.selectById(links.wrongQuestionId());
+            if (item == null || !item.getStudentId().equals(plan.getStudentId())) {
+                throw rule("wrong question does not belong to the plan student");
+            }
+        } else if (links.resourceId() != null) {
+            if (resources.selectById(links.resourceId()) == null) throw rule("resource does not exist");
+        } else if (links.knowledgeId() != null) {
+            KnowledgeNodeReferenceEntity item = knowledgeNodes.selectById(links.knowledgeId());
+            if (item == null || !Boolean.TRUE.equals(item.getEnabled())) throw rule("knowledge node is unavailable");
+        } else if (links.examId() != null) {
+            ExamEntity item = exams.selectById(links.examId());
+            if (item == null || !item.getStudentId().equals(plan.getStudentId())) {
+                throw rule("exam does not belong to the plan student");
+            }
+        }
+        return links;
+    }
+
+    private List<TaskLinks> validateLinks(StudyPlanEntity plan, List<StudyPlanTaskCreateRequest> requests) {
+        List<TaskLinks> links = requests.stream().map(request -> parseLinks(request.getTaskType(),
+                request.getResourceId(), request.getWrongQuestionId(), request.getKnowledgeId(), request.getExamId()))
+                .toList();
+        Map<Long, WrongQuestionEntity> wrongQuestionRows = byId(wrongQuestions,
+                links.stream().map(TaskLinks::wrongQuestionId).collect(Collectors.toSet()), WrongQuestionEntity::getId);
+        Map<Long, LearningResourceEntity> resourceRows = byId(resources,
+                links.stream().map(TaskLinks::resourceId).collect(Collectors.toSet()), LearningResourceEntity::getId);
+        Map<Long, KnowledgeNodeReferenceEntity> knowledgeRows = byId(knowledgeNodes,
+                links.stream().map(TaskLinks::knowledgeId).collect(Collectors.toSet()), KnowledgeNodeReferenceEntity::getId);
+        Map<Long, ExamEntity> examRows = byId(exams,
+                links.stream().map(TaskLinks::examId).collect(Collectors.toSet()), ExamEntity::getId);
+        for (TaskLinks link : links) {
+            if (link.wrongQuestionId() != null) {
+                WrongQuestionEntity item = wrongQuestionRows.get(link.wrongQuestionId());
+                if (item == null || !item.getStudentId().equals(plan.getStudentId())) {
+                    throw rule("wrong question does not belong to the plan student");
+                }
+            } else if (link.resourceId() != null && !resourceRows.containsKey(link.resourceId())) {
+                throw rule("resource does not exist");
+            } else if (link.knowledgeId() != null) {
+                KnowledgeNodeReferenceEntity item = knowledgeRows.get(link.knowledgeId());
+                if (item == null || !Boolean.TRUE.equals(item.getEnabled())) throw rule("knowledge node is unavailable");
+            } else if (link.examId() != null) {
+                ExamEntity item = examRows.get(link.examId());
+                if (item == null || !item.getStudentId().equals(plan.getStudentId())) {
+                    throw rule("exam does not belong to the plan student");
+                }
+            }
+        }
+        return links;
+    }
+
+    private TaskLinks parseLinks(StudyPlanTaskType type, String resourceId,
+            String wrongQuestionId, String knowledgeId, String examId) {
         if (type == null) throw rule("taskType is required");
         int supplied = countPresent(resourceId, wrongQuestionId, knowledgeId, examId);
         return switch (type) {
             case WRONG_QUESTION_REVIEW -> {
                 if (supplied != 1 || wrongQuestionId == null) throw rule("invalid wrong-question task links");
-                Long id = ids.toLong(wrongQuestionId);
-                WrongQuestionEntity item = wrongQuestions.selectById(id);
-                if (item == null || !item.getStudentId().equals(plan.getStudentId())) {
-                    throw rule("wrong question does not belong to the plan student");
-                }
-                yield new TaskLinks(null, id, null, null);
+                yield new TaskLinks(null, ids.toLong(wrongQuestionId), null, null);
             }
             case RESOURCE_LEARNING -> {
                 if (supplied != 1 || resourceId == null) throw rule("invalid resource task links");
-                Long id = ids.toLong(resourceId);
-                LearningResourceEntity item = resources.selectById(id);
-                if (item == null) throw rule("resource does not exist");
-                yield new TaskLinks(id, null, null, null);
+                yield new TaskLinks(ids.toLong(resourceId), null, null, null);
             }
             case KNOWLEDGE_PRACTICE -> {
                 if (supplied != 1 || knowledgeId == null) throw rule("invalid knowledge task links");
-                Long id = ids.toLong(knowledgeId);
-                KnowledgeNodeReferenceEntity item = knowledgeNodes.selectById(id);
-                if (item == null || !Boolean.TRUE.equals(item.getEnabled())) throw rule("knowledge node is unavailable");
-                yield new TaskLinks(null, null, id, null);
+                yield new TaskLinks(null, null, ids.toLong(knowledgeId), null);
             }
             case EXAM_REVIEW -> {
                 if (supplied != 1 || examId == null) throw rule("invalid exam task links");
-                Long id = ids.toLong(examId);
-                ExamEntity item = exams.selectById(id);
-                if (item == null || !item.getStudentId().equals(plan.getStudentId())) {
-                    throw rule("exam does not belong to the plan student");
-                }
-                yield new TaskLinks(null, null, null, id);
+                yield new TaskLinks(null, null, null, ids.toLong(examId));
             }
             case READING, OTHER -> {
                 if (supplied != 0) throw rule("reading and other tasks cannot reference business entities");
                 yield new TaskLinks(null, null, null, null);
             }
         };
+    }
+
+    private <T> Map<Long, T> byId(com.baomidou.mybatisplus.core.mapper.BaseMapper<T> mapper,
+            Set<Long> requested, Function<T, Long> id) {
+        Set<Long> ids = requested.stream().filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) return Map.of();
+        return mapper.selectBatchIds(ids).stream().collect(Collectors.toMap(id, Function.identity()));
     }
 
     private StudyPlanDto getById(Long planId) {

@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import com.stdntedu.base.service.BaseDataService;
 import com.stdntedu.ai.model.service.AiModelService;
 import com.stdntedu.ai.analysis.service.AiAnalysisService;
+import com.stdntedu.ai.analysis.generation.AiStudyPlanGenerationService;
 import com.stdntedu.ai.extraction.service.AiExtractionConfirmationService;
 import com.stdntedu.ai.extraction.service.AiExtractionQuestionService;
 import com.stdntedu.ai.extraction.service.AiExtractionService;
@@ -86,6 +87,7 @@ import com.stdntedu.generated.model.StudyPlanTaskStatus;
 import com.stdntedu.generated.model.StudyPlanTaskType;
 import com.stdntedu.generated.model.StudyPlanTaskUpdateRequest;
 import com.stdntedu.generated.model.StudyPlanUpdateRequest;
+import com.stdntedu.generated.model.StudyPlanGenerateRequest;
 import com.stdntedu.resource.service.LearningResourceService;
 import com.stdntedu.resource.service.ResourceHistoryService;
 import com.stdntedu.resource.service.StudyLogService;
@@ -123,6 +125,7 @@ public class GeneratedApiController implements DefaultApi {
     private final DashboardService dashboard;
     private final AiModelService aiModels;
     private final AiAnalysisService aiAnalyses;
+    private final AiStudyPlanGenerationService aiStudyPlanGeneration;
     private final AiExtractionService aiExtractions;
     private final AiExtractionQuestionService extractionQuestions;
     private final AiExtractionConfirmationService extractionConfirmations;
@@ -132,7 +135,8 @@ public class GeneratedApiController implements DefaultApi {
             ExamService exams, WrongQuestionService wrongQuestions, MasteryService mastery,
             LearningResourceService resources, ResourceHistoryService resourceHistory, StudyLogService studyLogs,
             StudentResourceService studentResources, StudyPlanService studyPlans, DashboardService dashboard,
-            AiModelService aiModels, AiAnalysisService aiAnalyses, AiExtractionService aiExtractions,
+            AiModelService aiModels, AiAnalysisService aiAnalyses,
+            AiStudyPlanGenerationService aiStudyPlanGeneration, AiExtractionService aiExtractions,
             AiExtractionQuestionService extractionQuestions,
             AiExtractionConfirmationService extractionConfirmations, RequestIdProvider requestIds) {
         this.baseData = baseData;
@@ -149,6 +153,7 @@ public class GeneratedApiController implements DefaultApi {
         this.dashboard = dashboard;
         this.aiModels = aiModels;
         this.aiAnalyses = aiAnalyses;
+        this.aiStudyPlanGeneration = aiStudyPlanGeneration;
         this.aiExtractions = aiExtractions;
         this.extractionQuestions = extractionQuestions;
         this.extractionConfirmations = extractionConfirmations;
@@ -384,6 +389,13 @@ public class GeneratedApiController implements DefaultApi {
     @Override public ResponseEntity<InlineObject1> createStudyPlan(StudyPlanCreateRequest request) {
         return ResponseEntity.status(201).body(new InlineObject1().code("CREATED").message("created")
                 .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(studyPlans.create(request)));
+    }
+
+    @Override public ResponseEntity<InlineObject10> generateStudyPlan(String idempotencyKey,
+            StudyPlanGenerateRequest request) {
+        return ResponseEntity.accepted().body(new InlineObject10().code("ACCEPTED").message("accepted")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(aiStudyPlanGeneration.generate(idempotencyKey, request)));
     }
 
     @Override public ResponseEntity<InlineObject1> getStudyPlan(String planId) {

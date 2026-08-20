@@ -34,4 +34,11 @@ public class AiProviderClientRegistry {
         if (client == null) throw new IllegalStateException("unsupported AI protocol");
         return client.extract(model, secret, request);
     }
+
+    public AiStructuredGenerationResult generate(AiModelEntity model, char[] secret,
+            AiStructuredGenerationRequest request) {
+        AiProviderClient client = clients.get(model.getProtocol());
+        if (client == null) throw new IllegalStateException("unsupported AI protocol");
+        return client.generate(model, secret, request);
+    }
 }

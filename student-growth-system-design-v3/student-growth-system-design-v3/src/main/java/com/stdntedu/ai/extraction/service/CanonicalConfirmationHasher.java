@@ -1,15 +1,11 @@
 package com.stdntedu.ai.extraction.service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
-import java.util.HexFormat;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.stdntedu.ai.common.CanonicalJsonHasher;
 import com.stdntedu.generated.model.AiConfirm;
 import com.stdntedu.generated.model.AiConfirmItem;
 import com.stdntedu.generated.model.KnowledgeLink;
@@ -18,8 +14,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class CanonicalConfirmationHasher {
     private final ObjectMapper objectMapper;
+    private final CanonicalJsonHasher hasher;
 
-    public CanonicalConfirmationHasher(ObjectMapper objectMapper) { this.objectMapper = objectMapper; }
+    public CanonicalConfirmationHasher(ObjectMapper objectMapper, CanonicalJsonHasher hasher) {
+        this.objectMapper = objectMapper;
+        this.hasher = hasher;
+    }
 
     public String hash(AiConfirm request) {
         ObjectNode root = objectMapper.createObjectNode();
@@ -27,12 +27,7 @@ public class CanonicalConfirmationHasher {
         ArrayNode questions = root.putArray("questions");
         request.getQuestions().stream().sorted(Comparator.comparing(AiConfirmItem::getTemporaryQuestionId))
                 .forEach(item -> questions.add(item(item)));
-        try {
-            byte[] canonical = objectMapper.writeValueAsString(root).getBytes(StandardCharsets.UTF_8);
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical));
-        } catch (JsonProcessingException | NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("canonical confirmation hash could not be created", ex);
-        }
+        return hasher.hash(root);
     }
 
     private ObjectNode item(AiConfirmItem item) {

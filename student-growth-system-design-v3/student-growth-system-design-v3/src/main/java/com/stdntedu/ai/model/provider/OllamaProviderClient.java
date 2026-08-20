@@ -2,6 +2,8 @@ package com.stdntedu.ai.model.provider;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stdntedu.ai.extraction.provider.AiExtractionProviderRequest;
 import com.stdntedu.ai.extraction.provider.AiExtractionProviderResultParser;
 import com.stdntedu.ai.extraction.provider.ProviderVisualInput;
@@ -58,5 +60,26 @@ public class OllamaProviderClient extends AbstractHttpProviderClient {
     @Override protected String extractionContent(JsonNode root) {
         JsonNode content = root.path("message").path("content");
         return content.isTextual() ? content.asText() : null;
+    }
+
+    @Override protected JsonNode generationRequest(AiModelEntity model, String prompt) {
+        ObjectNode root = objectMapper().createObjectNode();
+        root.put("model", model.getModelName());
+        root.put("stream", false);
+        root.put("format", "json");
+        ObjectNode options = root.putObject("options");
+        if (model.getTemperature() != null) options.put("temperature", model.getTemperature());
+        if (model.getMaxTokens() != null) options.put("num_predict", model.getMaxTokens());
+        ArrayNode messages = root.putArray("messages");
+        messages.addObject().put("role", "user").put("content", prompt);
+        return root;
+    }
+
+    @Override protected AiStructuredGenerationResult generationResult(JsonNode root) {
+        JsonNode content = root.path("message").path("content");
+        if (!content.isTextual() || content.asText().isBlank()) throw invalidProviderResponse();
+        return new AiStructuredGenerationResult(content.asText(),
+                nullableNonNegativeInteger(root.path("prompt_eval_count")),
+                nullableNonNegativeInteger(root.path("eval_count")));
     }
 }

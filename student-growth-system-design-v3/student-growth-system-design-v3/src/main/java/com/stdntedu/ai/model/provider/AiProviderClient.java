@@ -9,4 +9,6 @@ public interface AiProviderClient {
     AiProtocol protocol();
     ProviderConnectionResult testConnection(AiModelEntity model, char[] secret);
     AiExtractionProviderResult extract(AiModelEntity model, char[] secret, AiExtractionProviderRequest request);
+    AiStructuredGenerationResult generate(AiModelEntity model, char[] secret,
+            AiStructuredGenerationRequest request);
 }

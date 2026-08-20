@@ -135,6 +135,51 @@ abstract class AbstractHttpProviderClient implements AiProviderClient {
         }
     }
 
+    @Override
+    public AiStructuredGenerationResult generate(AiModelEntity model, char[] secret,
+            AiStructuredGenerationRequest generation) {
+        byte[] requestBody = null;
+        byte[] responseBody = null;
+        try {
+            requestBody = objectMapper.writeValueAsBytes(generationRequest(model, generation.prompt()));
+            URI endpoint = endpoint(URI.create(model.getApiBaseUrl()), extractionEndpointPath());
+            Duration timeout = Duration.ofSeconds(model.getTimeoutSeconds());
+            HttpRequest.Builder request = HttpRequest.newBuilder(endpoint).timeout(timeout)
+                    .header("Accept", "application/json").header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(requestBody));
+            authorize(request, model, secret);
+            HttpClient client = HttpClient.newBuilder().connectTimeout(timeout).build();
+            HttpResponse<InputStream> response = client.send(request.build(), HttpResponse.BodyHandlers.ofInputStream());
+            try (InputStream input = response.body()) {
+                responseBody = input.readNBytes(16 * 1024 * 1024 + 1);
+            }
+            if (responseBody.length > 16 * 1024 * 1024) {
+                throw provider("PROVIDER_RESPONSE_INVALID", "provider response was invalid");
+            }
+            if (response.statusCode() == 401 || response.statusCode() == 403) {
+                throw provider("PROVIDER_AUTHENTICATION_FAILED", "provider authentication failed");
+            }
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw provider("PROVIDER_REQUEST_FAILED", "provider request failed");
+            }
+            return generationResult(objectMapper.readTree(responseBody));
+        } catch (AiProviderException ex) {
+            throw ex;
+        } catch (HttpTimeoutException ex) {
+            throw provider("PROVIDER_TIMEOUT", "provider request timed out");
+        } catch (IllegalArgumentException | URISyntaxException ex) {
+            throw provider("PROVIDER_PROTOCOL_ERROR", "provider request configuration was invalid");
+        } catch (IOException ex) {
+            throw provider("PROVIDER_NETWORK_ERROR", "provider network request failed");
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw provider("PROVIDER_NETWORK_ERROR", "provider network request failed");
+        } finally {
+            if (requestBody != null) Arrays.fill(requestBody, (byte) 0);
+            if (responseBody != null) Arrays.fill(responseBody, (byte) 0);
+        }
+    }
+
     protected abstract String endpointPath();
     protected abstract boolean validResponse(JsonNode root);
     protected abstract boolean modelExists(JsonNode root, String modelName);
@@ -142,6 +187,22 @@ abstract class AbstractHttpProviderClient implements AiProviderClient {
     protected abstract void writeExtractionRequest(OutputStream output, AiModelEntity model,
             AiExtractionProviderRequest request) throws IOException;
     protected abstract String extractionContent(JsonNode root);
+    protected abstract JsonNode generationRequest(AiModelEntity model, String prompt);
+    protected abstract AiStructuredGenerationResult generationResult(JsonNode root);
+
+    protected ObjectMapper objectMapper() { return objectMapper; }
+
+    protected Integer nullableNonNegativeInteger(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) return null;
+        if (!node.canConvertToInt() || node.intValue() < 0) {
+            throw provider("PROVIDER_RESPONSE_INVALID", "provider response was invalid");
+        }
+        return node.intValue();
+    }
+
+    protected AiProviderException invalidProviderResponse() {
+        return provider("PROVIDER_RESPONSE_INVALID", "provider response was invalid");
+    }
 
     protected void writeBase64(OutputStream output, Path image) throws IOException {
         try (InputStream input = Files.newInputStream(image);

@@ -416,17 +416,18 @@ class StageEightB2IntegrationTest {
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").exists());
     }
 
-    @Test void scenarios126_127_generatedOperationsHavePathVariablesAndGenerateRemainsNotImplemented() throws Exception {
+    @Test void scenarios126_127_generatedOperationsHavePathVariablesAndGenerationValidatesReferences() throws Exception {
         String generatedApi = java.nio.file.Files.readString(java.nio.file.Path.of(
                 "target/generated-sources/openapi/src/main/java/com/stdntedu/generated/api/DefaultApi.java"));
         assertThat(generatedApi).contains("@PathVariable(\"planId\") String planId")
                 .contains("@PathVariable(\"taskId\") String taskId");
         mvc.perform(post("/api/v1/study-plans/generate")
-                        .header("Idempotency-Key", "stage8-generate-not-implemented-001")
+                        .header("Idempotency-Key", "stage8-generate-validation-001")
                         .contentType("application/json")
                         .content("{\"studentId\":\"1\",\"startDate\":\"2026-09-01\",\"endDate\":\"2026-09-30\","+
-                                "\"dailyAvailableMinutes\":60,\"modelId\":\"1\"}"))
-                .andExpect(status().isNotImplemented());
+                                "\"dailyAvailableMinutes\":60,\"modelId\":\"999999999\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
 
     @Test void generateStudyPlanWithoutIdempotencyKeyUsesUnifiedBadRequest() throws Exception {

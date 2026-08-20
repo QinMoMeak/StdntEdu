@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
+import com.stdntedu.ai.analysis.entity.AiAnalysisEntity;
 import com.stdntedu.ai.analysis.converter.AiAnalysisConverter;
 import com.stdntedu.ai.analysis.mapper.AiAnalysisQueryMapper;
 import com.stdntedu.ai.analysis.projection.AiAnalysisRow;
@@ -59,6 +60,31 @@ public class AiAnalysisService {
     public AiAnalysisDto get(String analysisId) {
         AiAnalysisRow row = queries.selectOne(ids.toLong(analysisId));
         if (row == null) throw new ResourceNotFoundException("AI analysis not found");
+        return converter.toDto(row, timezone.get());
+    }
+
+    public AiAnalysisDto toDto(AiAnalysisEntity entity, String modelName) {
+        AiAnalysisRow row = new AiAnalysisRow();
+        row.setId(entity.getId());
+        row.setStudentId(entity.getStudentId());
+        row.setBusinessType(entity.getBusinessType());
+        row.setBusinessId(entity.getBusinessId());
+        row.setAiModelId(entity.getAiModelId());
+        row.setModelName(modelName);
+        row.setPromptTemplateId(entity.getPromptTemplateId());
+        row.setStatus(entity.getStatus());
+        row.setInputSummary(entity.getInputSummary());
+        row.setResultJson(entity.getResultJson());
+        row.setErrorCode(entity.getErrorCode());
+        row.setErrorMessage(entity.getErrorMessage());
+        row.setPromptTokens(entity.getPromptTokens());
+        row.setCompletionTokens(entity.getCompletionTokens());
+        row.setDurationMs(entity.getDurationMs());
+        row.setStartedTime(entity.getStartedTime());
+        row.setFinishedTime(entity.getFinishedTime());
+        row.setEstimatedCost(entity.getEstimatedCost());
+        row.setCurrencyCode(entity.getCurrencyCode());
+        row.setCreateTime(entity.getCreateTime());
         return converter.toDto(row, timezone.get());
     }
 

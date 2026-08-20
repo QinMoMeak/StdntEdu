@@ -8,9 +8,12 @@ import com.stdntedu.studyplan.entity.StudyPlanEntity;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;
+import org.apache.ibatis.annotations.Select;
 
 @Mapper
 public interface StudyPlanMapper extends BaseMapper<StudyPlanEntity> {
+    @Select("SELECT COUNT(*) FROM study_plan WHERE source_analysis_id=#{analysisId}")
+    long countBySourceAnalysisId(@Param("analysisId") Long analysisId);
     @Update("""
             UPDATE study_plan
                SET title=#{title}, plan_type=#{planType}, start_date=#{startDate}, end_date=#{endDate},

@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 
 import com.stdntedu.base.service.BaseDataService;
 import com.stdntedu.ai.model.service.AiModelService;
+import com.stdntedu.ai.analysis.service.AiAnalysisService;
 import com.stdntedu.ai.extraction.service.AiExtractionConfirmationService;
 import com.stdntedu.ai.extraction.service.AiExtractionQuestionService;
 import com.stdntedu.ai.extraction.service.AiExtractionService;
@@ -15,6 +16,9 @@ import com.stdntedu.generated.model.AcademicTermUpdateRequest;
 import com.stdntedu.generated.model.AiModelCreateRequest;
 import com.stdntedu.generated.model.AiModelStatusChangeRequest;
 import com.stdntedu.generated.model.AiModelUpdateRequest;
+import com.stdntedu.generated.model.AiAnalysisBusinessType;
+import com.stdntedu.generated.model.AiAnalysisPageResponse;
+import com.stdntedu.generated.model.AiTaskStatus;
 import com.stdntedu.generated.model.AiConfirm;
 import com.stdntedu.generated.model.AiExtractionQuestionUpdateRequest;
 import com.stdntedu.generated.model.CancelAiExtractionRequest;
@@ -48,6 +52,7 @@ import com.stdntedu.generated.model.InlineObject6;
 import com.stdntedu.generated.model.InlineObject7;
 import com.stdntedu.generated.model.InlineObject8;
 import com.stdntedu.generated.model.InlineObject9;
+import com.stdntedu.generated.model.InlineObject10;
 import com.stdntedu.generated.model.InlineObject33;
 import com.stdntedu.generated.model.InlineObject34;
 import com.stdntedu.generated.model.InlineObject11;
@@ -117,6 +122,7 @@ public class GeneratedApiController implements DefaultApi {
     private final StudyPlanService studyPlans;
     private final DashboardService dashboard;
     private final AiModelService aiModels;
+    private final AiAnalysisService aiAnalyses;
     private final AiExtractionService aiExtractions;
     private final AiExtractionQuestionService extractionQuestions;
     private final AiExtractionConfirmationService extractionConfirmations;
@@ -126,7 +132,7 @@ public class GeneratedApiController implements DefaultApi {
             ExamService exams, WrongQuestionService wrongQuestions, MasteryService mastery,
             LearningResourceService resources, ResourceHistoryService resourceHistory, StudyLogService studyLogs,
             StudentResourceService studentResources, StudyPlanService studyPlans, DashboardService dashboard,
-            AiModelService aiModels, AiExtractionService aiExtractions,
+            AiModelService aiModels, AiAnalysisService aiAnalyses, AiExtractionService aiExtractions,
             AiExtractionQuestionService extractionQuestions,
             AiExtractionConfirmationService extractionConfirmations, RequestIdProvider requestIds) {
         this.baseData = baseData;
@@ -142,6 +148,7 @@ public class GeneratedApiController implements DefaultApi {
         this.studyPlans = studyPlans;
         this.dashboard = dashboard;
         this.aiModels = aiModels;
+        this.aiAnalyses = aiAnalyses;
         this.aiExtractions = aiExtractions;
         this.extractionQuestions = extractionQuestions;
         this.extractionConfirmations = extractionConfirmations;
@@ -454,6 +461,21 @@ public class GeneratedApiController implements DefaultApi {
     @Override public ResponseEntity<InlineObject5> listAiModels() {
         return ResponseEntity.ok(new InlineObject5().code("OK").message("success")
                 .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(aiModels.list()));
+    }
+
+    @Override public ResponseEntity<AiAnalysisPageResponse> listAiAnalyses(String studentId,
+            AiAnalysisBusinessType businessType, String businessId, String modelId, AiTaskStatus status,
+            OffsetDateTime startTime, OffsetDateTime endTime, Integer page, Integer pageSize) {
+        return ResponseEntity.ok(new AiAnalysisPageResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(aiAnalyses.list(studentId, businessType, businessId, modelId, status,
+                        startTime, endTime, page, pageSize)));
+    }
+
+    @Override public ResponseEntity<InlineObject10> getAiAnalysis(String analysisId) {
+        return ResponseEntity.ok(new InlineObject10().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(aiAnalyses.get(analysisId)));
     }
 
     @Override public ResponseEntity<InlineObject6> createAiModel(AiModelCreateRequest request) {

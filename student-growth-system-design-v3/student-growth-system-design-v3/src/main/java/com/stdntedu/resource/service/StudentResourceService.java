@@ -62,7 +62,7 @@ public class StudentResourceService {
         entity.setStudentId(studentId);
         entity.setResourceId(resourceId);
         entity.setStatus(request.getStatus() == null ? StudentResourceStatus.WAITING : request.getStatus());
-        entity.setAssignedTime(LocalDateTime.now());
+        entity.setAssignedTime(timezone.localDateTime());
         entity.setRemark(request.getRemark());
         entity.setVersion(0);
         try {

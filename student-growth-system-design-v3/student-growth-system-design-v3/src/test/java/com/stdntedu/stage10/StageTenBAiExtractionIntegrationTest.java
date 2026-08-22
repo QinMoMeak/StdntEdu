@@ -2,6 +2,10 @@ package com.stdntedu.stage10;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.reset;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -19,7 +23,6 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -27,10 +30,17 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stdntedu.ai.extraction.mapper.AiExtractionTaskMapper;
+import com.stdntedu.ai.extraction.resource.AttachmentStorageReconciliationService;
+import com.stdntedu.ai.extraction.resource.OriginalFileStorage;
+import com.stdntedu.ai.extraction.service.AiExtractionPersistenceService;
 import com.stdntedu.ai.extraction.service.AiExtractionConfirmationService;
 import com.stdntedu.ai.extraction.service.AiExtractionQuestionService;
+import com.stdntedu.ai.extraction.service.AiExtractionRecoveryService;
 import com.stdntedu.ai.extraction.service.AiExtractionService;
+import com.stdntedu.ai.extraction.service.AiExtractionWorker;
 import com.stdntedu.ai.extraction.service.CreateExtractionCommand;
+import com.stdntedu.ai.model.provider.AiProviderClientRegistry;
 import com.stdntedu.common.exception.BusinessException;
 import com.stdntedu.generated.model.AiConfirm;
 import com.stdntedu.generated.model.AiConfirmItem;
@@ -52,11 +62,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -69,7 +81,7 @@ import org.testcontainers.utility.DockerImageName;
 class StageTenBAiExtractionIntegrationTest {
     private static final String MASTER_KEY = Base64.getEncoder()
             .encodeToString("0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8));
-    private static final Path STORAGE_ROOT = Path.of(System.getProperty("java.io.tmpdir"),
+    private static final Path STORAGE_ROOT = Path.of("target",
             "stdntedu-stage10b-" + UUID.randomUUID()).toAbsolutePath();
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final AtomicReference<Mode> MODE = new AtomicReference<>(Mode.SUCCESS);
@@ -93,6 +105,9 @@ class StageTenBAiExtractionIntegrationTest {
         registry.add("spring.datasource.password", MYSQL::getPassword);
         registry.add("STDNTEDU_AI_SECRET_MASTER_KEY", () -> MASTER_KEY);
         registry.add("app.ai.extraction.storage-root", STORAGE_ROOT::toString);
+        registry.add("app.ai.provider.max-response-bytes", () -> 2048);
+        registry.add("app.ai.extraction.pending-rescan.initial-delay-ms", () -> 3600000);
+        registry.add("app.ai.study-plan.pending-rescan.initial-delay-ms", () -> 3600000);
     }
 
     @BeforeAll
@@ -112,8 +127,15 @@ class StageTenBAiExtractionIntegrationTest {
     @Autowired AiExtractionService extractions;
     @Autowired AiExtractionQuestionService questions;
     @Autowired AiExtractionConfirmationService confirmations;
+    @Autowired AiExtractionTaskMapper taskMapper;
+    @Autowired AiExtractionWorker worker;
+    @Autowired AiExtractionRecoveryService recovery;
+    @Autowired AttachmentStorageReconciliationService reconciliation;
+    @Autowired OriginalFileStorage storage;
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
+    @SpyBean AiExtractionPersistenceService persistence;
+    @SpyBean AiProviderClientRegistry providers;
 
     private long studentId;
     private long subjectId;
@@ -178,7 +200,7 @@ class StageTenBAiExtractionIntegrationTest {
     void scenarioMultipartOperationAcceptsFrozenFieldsAndReturns202() throws Exception {
         long modelId = model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "multipart");
         MockMultipartFile image = upload();
-        mvc.perform(multipart("/api/v1/ai/wrong-question-extractions")
+        String taskId = JSON.readTree(mvc.perform(multipart("/api/v1/ai/wrong-question-extractions")
                         .file(image)
                         .param("studentId", Long.toString(studentId))
                         .param("sourceType", "PRACTICE")
@@ -188,7 +210,9 @@ class StageTenBAiExtractionIntegrationTest {
                         .param("sourceName", "worksheet"))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.data.taskId").isString())
-                .andExpect(jsonPath("$.data.status").value("REVIEW_REQUIRED"));
+                .andExpect(jsonPath("$.data.status").value("PENDING"))
+                .andReturn().getResponse().getContentAsString()).at("/data/taskId").asText();
+        assertThat(awaitTerminal(taskId).getStatus()).isEqualTo(AiTaskStatus.REVIEW_REQUIRED);
     }
 
     @Test
@@ -226,14 +250,28 @@ class StageTenBAiExtractionIntegrationTest {
     }
 
     @Test
+    void stage11cOversizedProviderResponseFailsWithoutPersistingRawBody() throws Exception {
+        MODE.set(Mode.OVERSIZED);
+
+        AiTask task = create(model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "oversized"));
+
+        assertThat(task.getStatus()).isEqualTo(AiTaskStatus.FAILED);
+        assertThat(task.getErrorCode()).isEqualTo("PROVIDER_RESPONSE_TOO_LARGE");
+        assertThat(task.getErrorMessage()).doesNotContain("raw-provider-secret");
+        assertThat(count("ai_extraction_question")).isZero();
+    }
+
+    @Test
     void scenariosFailedTaskCanBeExplicitlyRetriedWithCasAndOriginalAttachment() throws Exception {
         MODE.set(Mode.HTTP_500);
         AiTask failed = create(model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "retry"));
         assertThat(failed.getStatus()).isEqualTo(AiTaskStatus.FAILED);
         MODE.set(Mode.SUCCESS);
 
-        AiTask retried = extractions.retry(failed.getTaskId(),
+        AiTask accepted = extractions.retry(failed.getTaskId(),
                 new RetryAiExtractionRequest().resetTemporaryQuestions(true));
+        assertThat(accepted.getStatus()).isEqualTo(AiTaskStatus.PENDING);
+        AiTask retried = awaitTerminal(failed.getTaskId());
         assertThat(retried.getStatus()).isEqualTo(AiTaskStatus.REVIEW_REQUIRED);
         assertThat(retried.getRetryCount()).isEqualTo(1);
         assertThat(retried.getFileCount()).isEqualTo(1);
@@ -248,12 +286,13 @@ class StageTenBAiExtractionIntegrationTest {
         releaseProvider = new CountDownLatch(1);
         long modelId = model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "delayed");
 
-        CompletableFuture<AiTask> creation = CompletableFuture.supplyAsync(() -> createUnchecked(modelId));
+        AiTask accepted = createAccepted(modelId);
+        assertThat(accepted.getStatus()).isEqualTo(AiTaskStatus.PENDING);
         assertThat(providerEntered.await(10, TimeUnit.SECONDS)).isTrue();
-        Long taskId = awaitRunningTask();
+        Long taskId = Long.valueOf(accepted.getTaskId());
         AiTask cancelled = extractions.cancel(taskId.toString(), new CancelAiExtractionRequest().reason("user stop"));
         releaseProvider.countDown();
-        AiTask returned = creation.get(10, TimeUnit.SECONDS);
+        AiTask returned = awaitStatus(taskId.toString(), AiTaskStatus.CANCELLED);
 
         assertThat(cancelled.getStatus()).isEqualTo(AiTaskStatus.CANCELLED);
         assertThat(returned.getStatus()).isEqualTo(AiTaskStatus.CANCELLED);
@@ -372,16 +411,218 @@ class StageTenBAiExtractionIntegrationTest {
                         error -> assertThat(error.getStatus()).isEqualTo(HttpStatus.CONFLICT));
     }
 
-    private AiTask create(long modelId) throws IOException {
-        return extractions.create(List.of(upload()), command(modelId));
+    @Test
+    void stage11bDatabaseRollbackCompensatesPhysicalFilesAndLeavesNoMetadata() throws Exception {
+        long modelId = model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "db-rollback");
+        doAnswer(invocation -> {
+            invocation.callRealMethod();
+            throw new IllegalStateException("forced transaction rollback");
+        }).when(persistence).createRecords(any(CreateExtractionCommand.class), any(), anyList());
+        try {
+            assertThatThrownBy(() -> createAccepted(modelId)).isInstanceOf(IllegalStateException.class);
+        } finally {
+            reset(persistence);
+        }
+
+        assertThat(count("ai_extraction_task")).isZero();
+        assertThat(count("ai_extraction_file")).isZero();
+        assertThat(count("attachment")).isZero();
+        try (var paths = Files.list(storage.root())) {
+            assertThat(paths).isEmpty();
+        }
     }
 
-    private AiTask createUnchecked(long modelId) {
+    @Test
+    void stage11bWorkerClaimIsDatabaseCasAndOnlyOneClaimSucceeds() throws Exception {
+        AiTask task = create(model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "cas"));
+        long taskId = Long.parseLong(task.getTaskId());
+        jdbc.update("UPDATE ai_extraction_task SET status='PENDING' WHERE id=?", taskId);
+
+        assertThat(taskMapper.start(taskId, "PENDING")).isEqualTo(1);
+        assertThat(taskMapper.start(taskId, "PENDING")).isZero();
+    }
+
+    @Test
+    void stage11bProviderRunsOutsideDatabaseWriteTransaction() throws Exception {
+        AtomicReference<Boolean> transactionActive = new AtomicReference<>();
+        doAnswer(invocation -> {
+            transactionActive.set(TransactionSynchronizationManager.isActualTransactionActive());
+            return invocation.callRealMethod();
+        }).when(providers).extract(any(), any(), any());
         try {
-            return create(modelId);
-        } catch (IOException ex) {
-            throw new IllegalStateException(ex);
+            assertThat(create(model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "tx-boundary")).getStatus())
+                    .isEqualTo(AiTaskStatus.REVIEW_REQUIRED);
+        } finally {
+            reset(providers);
         }
+        assertThat(transactionActive.get()).isFalse();
+    }
+
+    @Test
+    void stage11bRecoveryRedispatchesPendingAndReplaysRunningWithoutQuestions() throws Exception {
+        AiTask original = create(model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "recovery-empty"));
+        long taskId = Long.parseLong(original.getTaskId());
+        jdbc.update("DELETE FROM ai_extraction_question_knowledge WHERE extraction_question_id IN "
+                + "(SELECT id FROM ai_extraction_question WHERE task_id=?)", taskId);
+        jdbc.update("DELETE FROM ai_extraction_question WHERE task_id=?", taskId);
+        jdbc.update("UPDATE ai_extraction_task SET status='RUNNING' WHERE id=?", taskId);
+        LAST_PATH.set(null);
+
+        recovery.recover();
+        AiTask recovered = awaitTerminal(original.getTaskId());
+
+        assertThat(recovered.getStatus()).isEqualTo(AiTaskStatus.REVIEW_REQUIRED);
+        assertThat(recovered.getQuestionCount()).isEqualTo(1);
+        assertThat(LAST_PATH.get()).isNotNull();
+    }
+
+    @Test
+    void stage11bRecoveryPreservesExistingQuestionsAndSkipsCancelledTasks() throws Exception {
+        AiTask withQuestion = create(model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "recovery-question"));
+        long withQuestionId = Long.parseLong(withQuestion.getTaskId());
+        jdbc.update("UPDATE ai_extraction_task SET status='RUNNING' WHERE id=?", withQuestionId);
+        int questionCount = count("ai_extraction_question");
+        LAST_PATH.set(null);
+
+        recovery.recover();
+
+        assertThat(extractions.get(withQuestion.getTaskId()).getStatus()).isEqualTo(AiTaskStatus.REVIEW_REQUIRED);
+        assertThat(count("ai_extraction_question")).isEqualTo(questionCount);
+        assertThat(LAST_PATH.get()).isNull();
+
+        jdbc.update("UPDATE ai_extraction_task SET status='CANCELLED' WHERE id=?", withQuestionId);
+        recovery.recover();
+        assertThat(extractions.get(withQuestion.getTaskId()).getStatus()).isEqualTo(AiTaskStatus.CANCELLED);
+        assertThat(LAST_PATH.get()).isNull();
+    }
+
+    @Test
+    void stage11cPendingRescanRedispatchesWithoutProcessRestart() throws Exception {
+        AiTask original = create(model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "periodic-rescan"));
+        long taskId = Long.parseLong(original.getTaskId());
+        jdbc.update("DELETE FROM ai_extraction_question_knowledge WHERE extraction_question_id IN "
+                + "(SELECT id FROM ai_extraction_question WHERE task_id=?)", taskId);
+        jdbc.update("DELETE FROM ai_extraction_question WHERE task_id=?", taskId);
+        jdbc.update("UPDATE ai_extraction_task SET status='PENDING',progress_stage='QUEUED' WHERE id=?", taskId);
+        LAST_PATH.set(null);
+
+        recovery.rescanPending();
+        AiTask recovered = awaitTerminal(original.getTaskId());
+
+        assertThat(recovered.getStatus()).isEqualTo(AiTaskStatus.REVIEW_REQUIRED);
+        assertThat(recovered.getQuestionCount()).isEqualTo(1);
+        assertThat(LAST_PATH.get()).endsWith("/chat/completions");
+    }
+
+    @Test
+    void stage11bMissingAttachmentFailsSafelyWithoutLeakingItsPath() throws Exception {
+        AiTask original = create(model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "missing-file"));
+        long taskId = Long.parseLong(original.getTaskId());
+        String storedPath = jdbc.queryForObject("SELECT storage_path FROM attachment", String.class);
+        jdbc.update("DELETE FROM ai_extraction_question_knowledge WHERE extraction_question_id IN "
+                + "(SELECT id FROM ai_extraction_question WHERE task_id=?)", taskId);
+        jdbc.update("DELETE FROM ai_extraction_question WHERE task_id=?", taskId);
+        jdbc.update("UPDATE ai_extraction_task SET status='PENDING' WHERE id=?", taskId);
+        Files.delete(Path.of(storedPath));
+
+        worker.execute(taskId);
+        AiTask failed = extractions.get(original.getTaskId());
+
+        assertThat(failed.getStatus()).isEqualTo(AiTaskStatus.FAILED);
+        assertThat(failed.getErrorCode()).isEqualTo("STORAGE_FILE_MISSING");
+        assertThat(failed.getErrorMessage()).doesNotContain(storedPath).doesNotContain(storage.root().toString());
+    }
+
+    @Test
+    void stage11bReconciliationDetectsMissingAndOrphanFilesWithoutDeletingRecordsOrFiles() throws Exception {
+        create(model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "reconcile"));
+        Long attachmentId = jdbc.queryForObject("SELECT id FROM attachment", Long.class);
+        Path stored = Path.of(jdbc.queryForObject("SELECT storage_path FROM attachment", String.class));
+        Files.delete(stored);
+        Path orphan = storage.root().resolve("0123456789abcdef0123456789abcdef.png");
+        Files.write(orphan, new byte[] {1});
+
+        var report = reconciliation.reconcile();
+
+        assertThat(report.missingAttachmentIds()).containsExactly(attachmentId);
+        assertThat(report.missingCount()).isEqualTo(1);
+        assertThat(report.orphanCount()).isEqualTo(1);
+        assertThat(count("attachment")).isEqualTo(1);
+        assertThat(orphan).exists();
+    }
+
+    @Test
+    void stage11bSavedQuestionCannotBeResetByRetry() throws Exception {
+        AiTask task = create(model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "saved-retry"));
+        String questionId = questionId(task);
+        confirmations.confirm(task.getTaskId(), "saved-retry-key-01",
+                confirmation(questionId, Long.toString(knowledgeId), "saved question"));
+        jdbc.update("UPDATE ai_extraction_task SET status='FAILED' WHERE id=?", Long.valueOf(task.getTaskId()));
+
+        assertThatThrownBy(() -> extractions.retry(task.getTaskId(),
+                new RetryAiExtractionRequest().resetTemporaryQuestions(true)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getStatus()).isEqualTo(HttpStatus.CONFLICT));
+        assertThat(jdbc.queryForObject("SELECT status FROM ai_extraction_question WHERE id=?", String.class,
+                Long.valueOf(questionId))).isEqualTo("SAVED");
+    }
+
+    @Test
+    void stage11bUnexpectedWorkerFailureBecomesSanitizedFailedState() throws Exception {
+        doAnswer(invocation -> { throw new IllegalStateException("C:\\private\\provider-secret"); })
+                .when(providers).extract(any(), any(), any());
+        AiTask failed;
+        try {
+            failed = awaitTerminal(createAccepted(
+                    model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "runtime-failure")).getTaskId());
+        } finally {
+            reset(providers);
+        }
+
+        assertThat(failed.getStatus()).isEqualTo(AiTaskStatus.FAILED);
+        assertThat(failed.getErrorCode()).isEqualTo("PROCESSING_FAILED");
+        assertThat(failed.getErrorMessage()).isEqualTo("extraction processing failed");
+    }
+
+    @Test
+    void stage11bPendingCancellationPreventsWorkerClaim() throws Exception {
+        AiTask original = create(model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "pending-cancel"));
+        long taskId = Long.parseLong(original.getTaskId());
+        jdbc.update("DELETE FROM ai_extraction_question_knowledge WHERE extraction_question_id IN "
+                + "(SELECT id FROM ai_extraction_question WHERE task_id=?)", taskId);
+        jdbc.update("DELETE FROM ai_extraction_question WHERE task_id=?", taskId);
+        jdbc.update("UPDATE ai_extraction_task SET status='PENDING' WHERE id=?", taskId);
+        LAST_PATH.set(null);
+
+        extractions.cancel(original.getTaskId(), new CancelAiExtractionRequest().reason("cancel before claim"));
+        worker.execute(taskId);
+
+        assertThat(extractions.get(original.getTaskId()).getStatus()).isEqualTo(AiTaskStatus.CANCELLED);
+        assertThat(count("ai_extraction_question")).isZero();
+        assertThat(LAST_PATH.get()).isNull();
+    }
+
+    @Test
+    void stage11bPersistedAttachmentOrderReconstructsOriginalMultipartOrder() throws Exception {
+        long modelId = model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "ordering");
+        byte[] image = png();
+        AiTask accepted = extractions.create(List.of(
+                new MockMultipartFile("files", "second-name.png", "image/png", image),
+                new MockMultipartFile("files", "first-name.png", "image/png", image)), command(modelId));
+        awaitTerminal(accepted.getTaskId());
+
+        assertThat(persistence.storedAttachments(Long.valueOf(accepted.getTaskId())))
+                .extracting(item -> item.sortOrder()).containsExactly(0, 1);
+        assertThat(persistence.storedAttachments(Long.valueOf(accepted.getTaskId())))
+                .extracting(item -> item.fileName()).containsExactly("second-name.png", "first-name.png");
+    }
+
+    private AiTask create(long modelId) throws IOException {
+        return awaitTerminal(createAccepted(modelId).getTaskId());
+    }
+
+    private AiTask createAccepted(long modelId) throws IOException {
+        return extractions.create(List.of(upload()), command(modelId));
     }
 
     private CreateExtractionCommand command(long modelId) {
@@ -430,14 +671,31 @@ class StageTenBAiExtractionIntegrationTest {
         }
     }
 
-    private Long awaitRunningTask() throws InterruptedException {
-        for (int attempt = 0; attempt < 100; attempt++) {
-            List<Long> ids = jdbc.query("SELECT id FROM ai_extraction_task WHERE status='RUNNING'",
-                    (rs, row) -> rs.getLong(1));
-            if (!ids.isEmpty()) return ids.getFirst();
-            Thread.sleep(50);
+    private AiTask awaitTerminal(String taskId) {
+        for (int attempt = 0; attempt < 200; attempt++) {
+            AiTask task = extractions.get(taskId);
+            if (task.getStatus() != AiTaskStatus.PENDING && task.getStatus() != AiTaskStatus.RUNNING) return task;
+            sleep();
         }
-        throw new AssertionError("running extraction task was not observed");
+        throw new AssertionError("extraction task did not reach a terminal or review state");
+    }
+
+    private AiTask awaitStatus(String taskId, AiTaskStatus expected) {
+        for (int attempt = 0; attempt < 200; attempt++) {
+            AiTask task = extractions.get(taskId);
+            if (task.getStatus() == expected) return task;
+            sleep();
+        }
+        throw new AssertionError("extraction task did not reach " + expected);
+    }
+
+    private void sleep() {
+        try {
+            Thread.sleep(50);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("interrupted while waiting for extraction task", ex);
+        }
     }
 
     private int count(String table) {
@@ -473,6 +731,13 @@ class StageTenBAiExtractionIntegrationTest {
                 Thread.currentThread().interrupt();
                 throw new IOException(ex);
             }
+        }
+        if (mode == Mode.OVERSIZED) {
+            byte[] bytes = ("raw-provider-secret" + "x".repeat(4096)).getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, bytes.length);
+            try { exchange.getResponseBody().write(bytes); } catch (IOException ignored) { }
+            exchange.close();
+            return;
         }
         int statusCode = mode == Mode.HTTP_500 ? 500 : 200;
         String body = responseBody(mode, exchange.getRequestURI().getPath());
@@ -516,5 +781,5 @@ class StageTenBAiExtractionIntegrationTest {
         }
     }
 
-    private enum Mode { SUCCESS, TWO_QUESTIONS, MALFORMED, HTTP_500, DELAYED }
+    private enum Mode { SUCCESS, TWO_QUESTIONS, MALFORMED, HTTP_500, DELAYED, OVERSIZED }
 }

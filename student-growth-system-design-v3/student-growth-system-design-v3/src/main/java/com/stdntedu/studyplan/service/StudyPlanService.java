@@ -244,7 +244,7 @@ public class StudyPlanService {
             throw rule("actualDurationSeconds must be greater than or equal to zero");
         }
         return transitionTask(planId, taskId, request.getVersion(), StudyPlanTaskStatus.COMPLETED,
-                request.getActualDurationSeconds(), LocalDateTime.now(timezone.get()), "TASK_COMPLETE", null,
+                request.getActualDurationSeconds(), timezone.localDateTime(), "TASK_COMPLETE", null,
                 request.getNote());
     }
 

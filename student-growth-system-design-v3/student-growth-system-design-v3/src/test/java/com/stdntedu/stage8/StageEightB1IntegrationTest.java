@@ -341,14 +341,17 @@ class StageEightB1IntegrationTest {
                 .andExpect(jsonPath("$.data.subjectId").isString());
     }
 
-    @Test void existingAssignmentRemainsReadableAfterResourceLogicalDeletion() {
+    @Test void deletedResourceIsHiddenFromAssignmentDetailAndList() {
         String student = student();
         Resource resource = resource(subject(), ResourceStatus.WAITING);
         StudentResourceDto assignment = assignments.create(new StudentResourceCreateRequest(student, resource.getId()));
         jdbc.update("update learning_resource set deleted=1 where id=?", Long.valueOf(resource.getId()));
-        assertThat(assignments.get(assignment.getId()).getResourceTitle()).isEqualTo(resource.getTitle());
+        assertThatThrownBy(() -> assignments.get(assignment.getId()))
+                .isInstanceOf(ResourceNotFoundException.class);
         assertThat(assignments.list(student, null, null, 1, 20).getItems())
-                .extracting(StudentResourceDto::getId).contains(assignment.getId());
+                .extracting(StudentResourceDto::getId).doesNotContain(assignment.getId());
+        assertThat(jdbc.queryForObject("select count(*) from student_resource_assignment where id=?",
+                Integer.class, Long.valueOf(assignment.getId()))).isEqualTo(1);
     }
 
     private CompletableFuture<Attempt> concurrentCreate(String student, String resource, CountDownLatch ready,

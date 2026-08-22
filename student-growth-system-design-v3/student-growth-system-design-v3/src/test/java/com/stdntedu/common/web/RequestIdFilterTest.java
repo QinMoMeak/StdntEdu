@@ -26,6 +26,7 @@ class RequestIdFilterTest {
         new RequestIdFilter().doFilter(request, response, chain);
 
         assertThat(response.getHeader(RequestIdFilter.HEADER)).isEqualTo("client-request");
+        assertThat(request.getAttribute(RequestIdFilter.ATTRIBUTE)).isEqualTo("client-request");
         verify(chain).doFilter(request, response);
     }
 
@@ -37,6 +38,8 @@ class RequestIdFilterTest {
         new RequestIdFilter().doFilter(request, response, chain);
 
         assertThat(response.getHeader(RequestIdFilter.HEADER)).isNotBlank();
+        assertThat(request.getAttribute(RequestIdFilter.ATTRIBUTE))
+                .isEqualTo(response.getHeader(RequestIdFilter.HEADER));
         verify(chain).doFilter(request, response);
     }
 }

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 
+import com.stdntedu.common.exception.InvalidIdException;
 import org.junit.jupiter.api.Test;
 
 class IdConverterTest {
@@ -20,7 +21,9 @@ class IdConverterTest {
     @Test
     void rejectsBlankZeroNegativeAndNonNumericIds() {
         for (String value : java.util.stream.Stream.of((String) null, "", "0", "-1", "abc").toList()) {
-            assertThatThrownBy(() -> converter.toLong(value)).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> converter.toLong(value)).isInstanceOf(InvalidIdException.class);
         }
+        assertThatThrownBy(() -> converter.toLong("9223372036854775808"))
+                .isInstanceOf(InvalidIdException.class);
     }
 }

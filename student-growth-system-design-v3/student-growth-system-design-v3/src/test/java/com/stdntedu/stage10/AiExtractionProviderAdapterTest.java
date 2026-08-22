@@ -26,6 +26,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class AiExtractionProviderAdapterTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -101,12 +102,22 @@ class AiExtractionProviderAdapterTest {
                         ex -> assertThat(ex.code()).isEqualTo("PROVIDER_TIMEOUT"));
     }
 
-    @Test void oversizedProviderResponseIsRejectedAtSixteenMiBBoundary(@TempDir Path directory) throws Exception {
+    @Test void providerResponseBoundaryIsAccepted(@TempDir Path directory) throws Exception {
+        String prefix = "{\"choices\":[{\"message\":{\"content\":\"{\\\"questions\\\":[{\\\"questionText\\\":\\\"x\\\"}]}\"}}]}";
+        String body = prefix + " ".repeat(1024 - prefix.getBytes(StandardCharsets.UTF_8).length);
+        server.createContext("/chat/completions", exchange -> respond(exchange, 200, body));
+        OpenAiCompatibleProviderClient client = openAi();
+        ReflectionTestUtils.setField(client, "maxResponseBytes", 1024);
+
+        assertThat(client.extract(model(AiAuthType.NONE), null, request(directory)).questions()).hasSize(1);
+    }
+
+    @Test void oversizedProviderResponseIsBoundedAndSanitized(@TempDir Path directory) throws Exception {
         server.createContext("/chat/completions", exchange -> {
-            long size = 16L * 1024 * 1024 + 1;
+            long size = 1025;
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, size);
-            byte[] chunk = new byte[8192];
+            byte[] chunk = "raw-provider-secret".getBytes(StandardCharsets.UTF_8);
             long remaining = size;
             while (remaining > 0) {
                 int length = (int) Math.min(chunk.length, remaining);
@@ -115,9 +126,14 @@ class AiExtractionProviderAdapterTest {
             }
             exchange.close();
         });
-        assertThatThrownBy(() -> openAi().extract(model(AiAuthType.NONE), null, request(directory)))
+        OpenAiCompatibleProviderClient client = openAi();
+        ReflectionTestUtils.setField(client, "maxResponseBytes", 1024);
+        assertThatThrownBy(() -> client.extract(model(AiAuthType.NONE), null, request(directory)))
                 .isInstanceOfSatisfying(AiProviderException.class,
-                        ex -> assertThat(ex.code()).isEqualTo("PROVIDER_RESPONSE_INVALID"));
+                        ex -> {
+                            assertThat(ex.code()).isEqualTo("PROVIDER_RESPONSE_TOO_LARGE");
+                            assertThat(ex.getMessage()).doesNotContain("raw-provider-secret");
+                        });
     }
 
     @Test void rawPdfMimeIsNeverAcceptedByProviderRequest(@TempDir Path directory) throws Exception {

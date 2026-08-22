@@ -118,7 +118,6 @@ public class AiModelService {
         return changeEnabled(modelId, request.getVersion(), false);
     }
 
-    @Transactional(readOnly = true)
     public AiModelConnectionTestDto testConnection(String modelId) {
         AiModelEntity entity = require(ids.toLong(modelId));
         validateStored(entity);

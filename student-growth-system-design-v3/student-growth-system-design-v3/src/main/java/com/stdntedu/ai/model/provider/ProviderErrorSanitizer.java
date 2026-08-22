@@ -21,6 +21,7 @@ public class ProviderErrorSanitizer {
         AUTHENTICATION_FAILED("provider authentication failed"),
         MODEL_NOT_FOUND("configured model was not found"),
         PROTOCOL_ERROR("provider response did not match the configured protocol"),
+        RESPONSE_TOO_LARGE("provider response exceeded the configured limit"),
         TIMEOUT("provider request timed out");
 
         private final String message;

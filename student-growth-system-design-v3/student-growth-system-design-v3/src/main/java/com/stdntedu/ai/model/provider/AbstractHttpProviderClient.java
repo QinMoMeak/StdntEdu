@@ -3,6 +3,7 @@ package com.stdntedu.ai.model.provider;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
@@ -13,6 +14,8 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import org.springframework.beans.factory.annotation.Value;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,6 +31,8 @@ abstract class AbstractHttpProviderClient implements AiProviderClient {
     private final ObjectMapper objectMapper;
     private final ProviderErrorSanitizer errors;
     private final AiExtractionProviderResultParser extractionParser;
+    @Value("${app.ai.provider.max-response-bytes:4194304}")
+    private int maxResponseBytes = 4 * 1024 * 1024;
 
     AbstractHttpProviderClient(ObjectMapper objectMapper, ProviderErrorSanitizer errors,
             AiExtractionProviderResultParser extractionParser) {
@@ -52,8 +57,10 @@ abstract class AbstractHttpProviderClient implements AiProviderClient {
                 request.header("Authorization", "Bearer " + new String(secret));
             }
             HttpClient client = HttpClient.newBuilder().connectTimeout(timeout).build();
-            HttpResponse<byte[]> response = client.send(request.build(), HttpResponse.BodyHandlers.ofByteArray());
-            body = response.body();
+            HttpResponse<InputStream> response = client.send(request.build(), HttpResponse.BodyHandlers.ofInputStream());
+            try (InputStream input = response.body()) {
+                body = readBounded(input);
+            }
             long latency = elapsed(started);
             if (response.statusCode() == 401 || response.statusCode() == 403) {
                 return errors.failure(ProviderErrorCode.AUTHENTICATION_FAILED, latency);
@@ -70,6 +77,8 @@ abstract class AbstractHttpProviderClient implements AiProviderClient {
                     : errors.failure(ProviderErrorCode.MODEL_NOT_FOUND, latency);
         } catch (HttpTimeoutException ex) {
             return errors.failure(ProviderErrorCode.TIMEOUT, elapsed(started));
+        } catch (ProviderResponseTooLargeException ex) {
+            return errors.failure(ProviderErrorCode.RESPONSE_TOO_LARGE, elapsed(started));
         } catch (IllegalArgumentException | URISyntaxException ex) {
             return errors.failure(ProviderErrorCode.PROTOCOL_ERROR, elapsed(started));
         } catch (IOException ex) {
@@ -101,10 +110,8 @@ abstract class AbstractHttpProviderClient implements AiProviderClient {
             HttpClient client = HttpClient.newBuilder().connectTimeout(timeout).build();
             HttpResponse<InputStream> response = client.send(request.build(), HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream input = response.body()) {
-                responseBody = input.readNBytes(16 * 1024 * 1024 + 1);
+                responseBody = readBounded(input);
             }
-            if (responseBody.length > 16 * 1024 * 1024) throw provider("PROVIDER_RESPONSE_INVALID",
-                    "provider response was invalid");
             if (response.statusCode() == 401 || response.statusCode() == 403) {
                 throw provider("PROVIDER_AUTHENTICATION_FAILED", "provider authentication failed");
             }
@@ -151,10 +158,7 @@ abstract class AbstractHttpProviderClient implements AiProviderClient {
             HttpClient client = HttpClient.newBuilder().connectTimeout(timeout).build();
             HttpResponse<InputStream> response = client.send(request.build(), HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream input = response.body()) {
-                responseBody = input.readNBytes(16 * 1024 * 1024 + 1);
-            }
-            if (responseBody.length > 16 * 1024 * 1024) {
-                throw provider("PROVIDER_RESPONSE_INVALID", "provider response was invalid");
+                responseBody = readBounded(input);
             }
             if (response.statusCode() == 401 || response.statusCode() == 403) {
                 throw provider("PROVIDER_AUTHENTICATION_FAILED", "provider authentication failed");
@@ -243,6 +247,21 @@ abstract class AbstractHttpProviderClient implements AiProviderClient {
         return new AiProviderException(code, message);
     }
 
+    private byte[] readBounded(InputStream input) throws IOException {
+        int maximum = Math.max(1, maxResponseBytes);
+        ByteArrayOutputStream output = new ByteArrayOutputStream(Math.min(maximum, 8192));
+        byte[] buffer = new byte[Math.min(maximum + 1, 8192)];
+        while (true) {
+            int remaining = maximum - output.size();
+            int read = input.read(buffer, 0, Math.min(buffer.length, remaining + 1));
+            if (read < 0) return output.toByteArray();
+            if (read > remaining) {
+                throw new ProviderResponseTooLargeException();
+            }
+            output.write(buffer, 0, read);
+        }
+    }
+
     private long elapsed(long started) {
         return Math.max(0, (System.nanoTime() - started) / 1_000_000L);
     }
@@ -250,5 +269,11 @@ abstract class AbstractHttpProviderClient implements AiProviderClient {
     private static final class NonClosingOutputStream extends java.io.FilterOutputStream {
         private NonClosingOutputStream(OutputStream output) { super(output); }
         @Override public void close() throws IOException { flush(); }
+    }
+
+    private static final class ProviderResponseTooLargeException extends AiProviderException {
+        private ProviderResponseTooLargeException() {
+            super("PROVIDER_RESPONSE_TOO_LARGE", "provider response exceeded the configured limit");
+        }
     }
 }

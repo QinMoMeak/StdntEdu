@@ -104,6 +104,7 @@ public interface DashboardQueryMapper {
               JOIN knowledge_node knowledge ON knowledge.id = mastery.knowledge_id
               LEFT JOIN subject ON subject.id = knowledge.subject_id
              WHERE mastery.student_id = #{studentId}
+               AND knowledge.deleted = 0
              ORDER BY mastery.mastery_score ASC, mastery.evidence_count DESC,
                       mastery.update_time DESC, mastery.id ASC
              LIMIT 5

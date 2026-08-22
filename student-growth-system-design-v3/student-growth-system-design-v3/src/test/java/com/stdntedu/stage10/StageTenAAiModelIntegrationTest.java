@@ -6,6 +6,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.doAnswer;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -16,7 +19,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.stdntedu.ai.model.provider.AiProviderClientRegistry;
 import com.stdntedu.ai.model.service.AiModelService;
 import com.stdntedu.common.exception.BusinessException;
 import com.stdntedu.common.exception.ResourceNotFoundException;
@@ -38,6 +43,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
@@ -45,6 +51,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -75,6 +82,9 @@ class StageTenAAiModelIntegrationTest {
         registry.add("spring.datasource.username", MYSQL::getUsername);
         registry.add("spring.datasource.password", MYSQL::getPassword);
         registry.add("STDNTEDU_AI_SECRET_MASTER_KEY", () -> MASTER_KEY);
+        registry.add("app.ai.provider.max-response-bytes", () -> 1024);
+        registry.add("app.ai.extraction.pending-rescan.initial-delay-ms", () -> 3600000);
+        registry.add("app.ai.study-plan.pending-rescan.initial-delay-ms", () -> 3600000);
     }
 
     @BeforeAll static void startServer() throws IOException {
@@ -91,6 +101,7 @@ class StageTenAAiModelIntegrationTest {
     @Autowired AiModelService models;
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
+    @SpyBean AiProviderClientRegistry providerRegistry;
 
     @BeforeEach void clean() {
         jdbc.update("DELETE FROM ai_model");
@@ -316,6 +327,37 @@ class StageTenAAiModelIntegrationTest {
         assertThat(count("operation_log")).isEqualTo(operations);
     }
 
+    @Test void stage11cConnectionHttpRunsOutsideDatabaseTransaction() {
+        AtomicBoolean transactionActive = new AtomicBoolean(true);
+        doAnswer(invocation -> {
+            transactionActive.set(TransactionSynchronizationManager.isActualTransactionActive());
+            return invocation.callRealMethod();
+        }).when(providerRegistry).testConnection(any(), nullable(char[].class));
+        String name = unique("no-long-transaction");
+        AiModelDto model = models.create(create(AiProvider.CUSTOM, AiProtocol.OPENAI_COMPATIBLE,
+                AiAuthType.NONE, endpoint("compatible", name), name, null));
+
+        assertThat(models.testConnection(model.getId()).getSuccess()).isTrue();
+        assertThat(transactionActive).isFalse();
+    }
+
+    @Test void stage11cConnectionResponseLimitUsesSanitizedFailure() {
+        AiModelDto model = compatibleAt("oversized", "oversized-model", null);
+
+        var result = models.testConnection(model.getId());
+
+        assertThat(result.getSuccess()).isFalse();
+        assertThat(result.getErrorCode()).isEqualTo("RESPONSE_TOO_LARGE");
+        assertThat(result.getMessage()).doesNotContain(RAW_PROVIDER_SECRET);
+    }
+
+    @Test void stage11cMysqlSessionTimezoneIsExplicitAndBusinessTimezoneIsConfigured() {
+        assertThat(jdbc.queryForObject("SELECT @@session.time_zone", String.class)).isEqualTo("+08:00");
+        assertThat(jdbc.queryForObject("SELECT @@system_time_zone", String.class)).isNotBlank();
+        assertThat(jdbc.queryForObject("SELECT config_value FROM system_config WHERE config_key='system.timezone'",
+                String.class)).isEqualTo("Asia/Shanghai");
+    }
+
     @Test void scenarios66_72_validationAndApplicationOutputNeverExposeApiKey(CapturedOutput output) throws Exception {
         String json = """
                 {"name":"name","provider":"OPENAI","modelName":"validation-model","modelType":"CHAT",
@@ -451,6 +493,8 @@ class StageTenAAiModelIntegrationTest {
         if (path.contains("/unauthorized/")) {
             status = 401;
             body = "{\"error\":\"" + RAW_PROVIDER_SECRET + "\"}";
+        } else if (path.contains("/oversized/")) {
+            body = "{\"data\":[]}" + RAW_PROVIDER_SECRET.repeat(100);
         } else if (path.contains("/error/")) {
             status = 500;
             body = "{\"error\":\"" + RAW_PROVIDER_SECRET + "\"}";

@@ -8,3 +8,8 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: false
+
+app:
+  ai:
+    extraction:
+      storage-root: ${STDNTEDU_DATA_DIR:/var/lib/stdntedu}/attachments

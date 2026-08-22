@@ -9,7 +9,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stdntedu.base.service.BaseDataService;
 import com.stdntedu.common.exception.BusinessException;
 import com.stdntedu.common.exception.DataConflictException;
@@ -29,9 +33,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.core.env.Environment;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -59,6 +66,14 @@ class StageThreeIntegrationTest {
     @Autowired private StudentService students;
     @Autowired private AcademicTermService terms;
     @Autowired private MockMvc mockMvc;
+    @Autowired private JdbcTemplate jdbc;
+    @Autowired private ObjectMapper objectMapper;
+    @Autowired private Environment environment;
+
+    @Test
+    void localV1BindsServerToLoopback() {
+        assertThat(environment.getProperty("server.address")).isEqualTo("127.0.0.1");
+    }
 
     @Test
     void listsEnabledBaseDataInStableOrder() {
@@ -193,11 +208,72 @@ class StageThreeIntegrationTest {
     }
 
     @Test
+    void concurrentCurrentTermCreatesLeaveExactlyOneCurrentTerm() throws Exception {
+        Student student = students.create(studentCreate("Concurrent Term Student", "1", "1"));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> createCurrentTermConcurrently(
+                    termCreate(student.getId(), "2040-2041", true), ready, start));
+            var second = executor.submit(() -> createCurrentTermConcurrently(
+                    termCreate(student.getId(), "2041-2042", true), ready, start));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            assertThat(first.get(30, TimeUnit.SECONDS).getCurrent()).isTrue();
+            assertThat(second.get(30, TimeUnit.SECONDS).getCurrent()).isTrue();
+        } finally {
+            executor.shutdownNow();
+        }
+
+        Integer currentCount = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM academic_term WHERE student_id = ? AND is_current = 1 AND deleted = 0",
+                Integer.class, Long.valueOf(student.getId()));
+        assertThat(currentCount).isEqualTo(1);
+        assertThat(terms.list(student.getId(), true)).hasSize(1);
+    }
+
+    @Test
     void requestIdHeaderMatchesResponseBody() throws Exception {
         mockMvc.perform(get("/api/v1/subjects").header("X-Request-ID", "request-id-acceptance"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-Request-ID", "request-id-acceptance"))
                 .andExpect(jsonPath("$.requestId").value("request-id-acceptance"));
+    }
+
+    @Test
+    void generatedRequestIdMatchesErrorResponseBody() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/v1/dictionaries/missing-generated-request-id"))
+                .andExpect(status().isNotFound()).andReturn();
+        assertRequestIdMatches(result, null);
+    }
+
+    @Test
+    void suppliedRequestIdMatchesErrorResponseBody() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/v1/dictionaries/missing-supplied-request-id")
+                        .header("X-Request-ID", "stage11a-supplied-request-id"))
+                .andExpect(status().isNotFound()).andReturn();
+        assertRequestIdMatches(result, "stage11a-supplied-request-id");
+    }
+
+    @Test
+    void zeroApiIdReturnsBadRequest() throws Exception {
+        assertInvalidApiId("0");
+    }
+
+    @Test
+    void negativeApiIdReturnsBadRequest() throws Exception {
+        assertInvalidApiId("-1");
+    }
+
+    @Test
+    void nonNumericApiIdReturnsBadRequest() throws Exception {
+        assertInvalidApiId("not-number");
+    }
+
+    @Test
+    void overflowingApiIdReturnsBadRequest() throws Exception {
+        assertInvalidApiId("9223372036854775808");
     }
 
     @Test
@@ -245,5 +321,29 @@ class StageThreeIntegrationTest {
                 .semester(SemesterType.FIRST).stageId("1").gradeId("1")
                 .startDate(LocalDate.of(Integer.parseInt(academicYear.substring(0, 4)), 9, 1))
                 .endDate(LocalDate.of(Integer.parseInt(academicYear.substring(5), 10), 1, 31)).current(current);
+    }
+
+    private AcademicTermDto createCurrentTermConcurrently(AcademicTermCreateRequest request, CountDownLatch ready,
+            CountDownLatch start) throws InterruptedException {
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("concurrent start timed out");
+        return terms.create(request);
+    }
+
+    private void assertRequestIdMatches(MvcResult result, String expectedRequestId) throws Exception {
+        String headerRequestId = result.getResponse().getHeader("X-Request-ID");
+        String bodyRequestId = objectMapper.readTree(result.getResponse().getContentAsByteArray())
+                .path("requestId").asText();
+        assertThat(headerRequestId).isNotBlank().isEqualTo(bodyRequestId);
+        if (expectedRequestId != null) assertThat(headerRequestId).isEqualTo(expectedRequestId);
+    }
+
+    private void assertInvalidApiId(String id) throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/v1/students/{studentId}", id))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+                .andExpect(jsonPath("$.data.fieldErrors").isArray())
+                .andReturn();
+        assertRequestIdMatches(result, null);
     }
 }

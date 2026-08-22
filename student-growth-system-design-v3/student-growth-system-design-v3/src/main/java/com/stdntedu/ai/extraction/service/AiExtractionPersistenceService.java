@@ -33,6 +33,7 @@ import com.stdntedu.common.exception.BusinessException;
 import com.stdntedu.common.exception.ResourceNotFoundException;
 import com.stdntedu.common.validation.IdConverter;
 import com.stdntedu.generated.model.AiTaskStatus;
+import com.stdntedu.resource.service.SystemTimezoneProvider;
 import com.stdntedu.score.entity.KnowledgeNodeReferenceEntity;
 import com.stdntedu.score.mapper.KnowledgeNodeReferenceMapper;
 import org.springframework.http.HttpStatus;
@@ -49,11 +50,12 @@ public class AiExtractionPersistenceService {
     private final AiExtractionCorrectionMapper corrections;
     private final KnowledgeNodeReferenceMapper knowledgeNodes;
     private final IdConverter ids;
+    private final SystemTimezoneProvider time;
 
     public AiExtractionPersistenceService(AttachmentMapper attachments, AiExtractionTaskMapper tasks,
             AiExtractionFileMapper files, AiExtractionQuestionMapper questions,
             AiExtractionQuestionKnowledgeMapper knowledgeLinks, AiExtractionCorrectionMapper corrections,
-            KnowledgeNodeReferenceMapper knowledgeNodes, IdConverter ids) {
+            KnowledgeNodeReferenceMapper knowledgeNodes, IdConverter ids, SystemTimezoneProvider time) {
         this.attachments = attachments;
         this.tasks = tasks;
         this.files = files;
@@ -62,6 +64,7 @@ public class AiExtractionPersistenceService {
         this.corrections = corrections;
         this.knowledgeNodes = knowledgeNodes;
         this.ids = ids;
+        this.time = time;
     }
 
     @Transactional
@@ -85,7 +88,7 @@ public class AiExtractionPersistenceService {
         task.setMaskPersonalInfo(command.maskPersonalInfo());
         task.setRetryCount(0);
         task.setMaxRetryCount(3);
-        task.setExpireTime(LocalDateTime.now().plusDays(7));
+        task.setExpireTime(time.localDateTime().plusDays(7));
         tasks.insert(task);
 
         for (StoredOriginal storedFile : stored) {
@@ -110,7 +113,7 @@ public class AiExtractionPersistenceService {
             extractionFile.setPreprocessStatus("VALIDATED");
             files.insert(extractionFile);
         }
-        return new CreatedExtraction(task.getId());
+        return new CreatedExtraction(task.getId(), task);
     }
 
     @Transactional
@@ -144,7 +147,8 @@ public class AiExtractionPersistenceService {
     public List<StoredAttachmentView> storedAttachments(Long taskId) {
         requireTask(taskId);
         List<AiExtractionFileEntity> taskFiles = files.selectList(Wrappers.<AiExtractionFileEntity>lambdaQuery()
-                .eq(AiExtractionFileEntity::getTaskId, taskId).orderByAsc(AiExtractionFileEntity::getSortOrder));
+                .eq(AiExtractionFileEntity::getTaskId, taskId)
+                .orderByAsc(AiExtractionFileEntity::getSortOrder).orderByAsc(AiExtractionFileEntity::getId));
         if (taskFiles.isEmpty()) return List.of();
         Map<Long, AttachmentEntity> found = attachments.selectBatchIds(taskFiles.stream()
                 .map(AiExtractionFileEntity::getAttachmentId).toList()).stream()
@@ -184,11 +188,38 @@ public class AiExtractionPersistenceService {
     }
 
     @Transactional
-    public void beginRetry(Long taskId, String expectedStatus, Long modelId, boolean reset) {
+    public AiExtractionTaskEntity beginRetry(Long taskId, String expectedStatus, Long modelId, boolean reset) {
         AiExtractionTaskEntity task = requireTask(taskId);
         if (!expectedStatus.equals(task.getStatus())) throw stateConflict("extraction retry conflict");
-        if (reset) resetTemporaryQuestionsInternal(taskId);
+        List<AiExtractionQuestionEntity> existing = questions(taskId);
+        if (reset) {
+            resetTemporaryQuestionsInternal(taskId);
+        } else if (!existing.isEmpty()) {
+            throw stateConflict("temporary questions must be reset before retry");
+        }
         if (tasks.retry(taskId, expectedStatus, modelId) == 0) throw stateConflict("extraction retry conflict");
+        task.setStatus(AiTaskStatus.PENDING.getValue());
+        task.setProgressStage("QUEUED");
+        task.setProgressPercent(0);
+        task.setModelId(modelId);
+        task.setRetryCount(task.getRetryCount() + 1);
+        task.setErrorCode(null);
+        task.setErrorMessage(null);
+        task.setStartedTime(null);
+        task.setFinishedTime(null);
+        return task;
+    }
+
+    @Transactional(readOnly = true)
+    public int fileCount(Long taskId) {
+        return Math.toIntExact(files.selectCount(Wrappers.<AiExtractionFileEntity>lambdaQuery()
+                .eq(AiExtractionFileEntity::getTaskId, taskId)));
+    }
+
+    @Transactional(readOnly = true)
+    public int questionCount(Long taskId) {
+        return Math.toIntExact(questions.selectCount(Wrappers.<AiExtractionQuestionEntity>lambdaQuery()
+                .eq(AiExtractionQuestionEntity::getTaskId, taskId)));
     }
 
     private void resetTemporaryQuestionsInternal(Long taskId) {

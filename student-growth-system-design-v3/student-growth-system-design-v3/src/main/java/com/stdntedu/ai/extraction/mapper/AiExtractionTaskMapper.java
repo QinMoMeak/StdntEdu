@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.stdntedu.ai.extraction.entity.AiExtractionTaskEntity;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 @Mapper
@@ -42,9 +43,9 @@ public interface AiExtractionTaskMapper extends BaseMapper<AiExtractionTaskEntit
 
     @Update("""
             UPDATE ai_extraction_task
-               SET status='RUNNING', progress_stage='PROVIDER_REQUEST', progress_percent=30,
+               SET status='PENDING', progress_stage='QUEUED', progress_percent=0,
                    model_id=#{modelId}, retry_count=retry_count+1, error_code=NULL, error_message=NULL,
-                   started_time=CURRENT_TIMESTAMP(3), finished_time=NULL
+                   started_time=NULL, finished_time=NULL
              WHERE id=#{id} AND status=#{expected} AND retry_count < max_retry_count
             """)
     int retry(@Param("id") Long id, @Param("expected") String expected, @Param("modelId") Long modelId);
@@ -56,4 +57,28 @@ public interface AiExtractionTaskMapper extends BaseMapper<AiExtractionTaskEntit
              WHERE id=#{id} AND status='REVIEW_REQUIRED'
             """)
     int markConfirmed(@Param("id") Long id);
+
+    @Update("""
+            UPDATE ai_extraction_task
+               SET status='PENDING', progress_stage='RECOVERED', progress_percent=0,
+                   started_time=NULL, finished_time=NULL, error_code=NULL, error_message=NULL
+             WHERE id=#{id} AND status='RUNNING'
+            """)
+    int resetRunning(@Param("id") Long id);
+
+    @Update("""
+            UPDATE ai_extraction_task
+               SET status='REVIEW_REQUIRED', progress_stage='REVIEW', progress_percent=100,
+                   finished_time=CURRENT_TIMESTAMP(3), error_code=NULL, error_message=NULL
+             WHERE id=#{id} AND status='RUNNING'
+            """)
+    int recoverReviewRequired(@Param("id") Long id);
+
+    @Select("""
+            SELECT id FROM ai_extraction_task
+             WHERE status=#{status} AND id>#{afterId}
+             ORDER BY id ASC LIMIT #{limit}
+            """)
+    java.util.List<Long> selectIdsByStatusAfter(@Param("status") String status,
+            @Param("afterId") Long afterId, @Param("limit") int limit);
 }

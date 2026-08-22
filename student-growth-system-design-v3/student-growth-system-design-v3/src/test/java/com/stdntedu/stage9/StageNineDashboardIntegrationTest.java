@@ -217,6 +217,23 @@ class StageNineDashboardIntegrationTest {
         assertThat(dashboards.get(student().toString(), null, TARGET, null).getWeakKnowledge()).isEmpty();
     }
 
+    @Test void deletedKnowledgeNodeIsExcludedFromWeakMasteryWithoutChangingMasteryRows() {
+        Long student = student();
+        Long subject = subject();
+        Long activeKnowledge = knowledge(subject, "active-knowledge");
+        Long deletedKnowledge = knowledge(subject, "deleted-knowledge");
+        mastery(student, activeKnowledge, "20.00", 2, false, null, LocalDateTime.of(2026, 8, 1, 8, 0));
+        mastery(student, deletedKnowledge, "1.00", 3, false, null, LocalDateTime.of(2026, 8, 1, 8, 1));
+        jdbc.update("UPDATE knowledge_node SET deleted = 1 WHERE id = ?", deletedKnowledge);
+        int masteryBefore = count("student_mastery");
+
+        DashboardDto result = dashboards.get(student.toString(), null, TARGET, null);
+
+        assertThat(result.getWeakKnowledge()).extracting(item -> item.getKnowledgeId())
+                .contains(activeKnowledge.toString()).doesNotContain(deletedKnowledge.toString());
+        assertThat(count("student_mastery")).isEqualTo(masteryBefore);
+    }
+
     @Test void scenarios66_85_resourceCountsWaitingListAndLatestProgressAreAssignmentBased() {
         Long student = student();
         Long other = student();

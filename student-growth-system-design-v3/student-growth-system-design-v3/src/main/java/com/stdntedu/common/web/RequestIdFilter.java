@@ -16,6 +16,7 @@ import jakarta.servlet.http.HttpServletResponse;
 public class RequestIdFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-Request-ID";
+    public static final String ATTRIBUTE = RequestIdFilter.class.getName() + ".requestId";
     public static final String MDC_KEY = "requestId";
 
     @Override
@@ -25,6 +26,7 @@ public class RequestIdFilter extends OncePerRequestFilter {
         if (requestId == null || requestId.isBlank()) {
             requestId = UUID.randomUUID().toString();
         }
+        request.setAttribute(ATTRIBUTE, requestId);
         MDC.put(MDC_KEY, requestId);
         response.setHeader(HEADER, requestId);
         try {

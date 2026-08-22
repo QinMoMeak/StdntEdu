@@ -45,6 +45,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<ApiResponseFactory.ErrorBody>> validation(ConstraintViolationException ex,
             HttpServletRequest request) {
+        if (ex.getConstraintViolations().stream()
+                .allMatch(violation -> violation.getPropertyPath().toString().matches(".*[iI]d$"))) {
+            return body("BAD_REQUEST", "malformed request", HttpStatus.BAD_REQUEST, request, List.of());
+        }
         List<ApiResponseFactory.FieldErrorItem> errors = ex.getConstraintViolations().stream()
                 .map(v -> new ApiResponseFactory.FieldErrorItem(v.getPropertyPath().toString(), v.getMessage(),
                         redactor.redactValue(v.getPropertyPath().toString(), v.getInvalidValue())))
@@ -94,6 +98,7 @@ public class GlobalExceptionHandler {
     }
 
     private String requestId(HttpServletRequest request) {
-        return request.getHeader(RequestIdFilter.HEADER);
+        Object requestId = request.getAttribute(RequestIdFilter.ATTRIBUTE);
+        return requestId instanceof String value ? value : null;
     }
 }

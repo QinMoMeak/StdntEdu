@@ -11,7 +11,8 @@ public class RequestIdProvider {
         var attributes = RequestContextHolder.getRequestAttributes();
         if (attributes instanceof ServletRequestAttributes servlet) {
             HttpServletRequest request = servlet.getRequest();
-            return request.getHeader(RequestIdFilter.HEADER);
+            Object requestId = request.getAttribute(RequestIdFilter.ATTRIBUTE);
+            return requestId instanceof String value ? value : null;
         }
         return null;
     }

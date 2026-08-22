@@ -100,7 +100,7 @@ public class StudyLogService {
         requireStudent(ids.toLong(studentId));
         if (subjectId != null) requireEnabledSubject(ids.toLong(subjectId));
         if (studyDate == null) throw invalid("studyDate is required");
-        if (studyDate.isAfter(LocalDate.now(timezone.get()))) throw invalid("studyDate cannot be in the future");
+        if (studyDate.isAfter(timezone.today())) throw invalid("studyDate cannot be in the future");
         if (durationSeconds == null || durationSeconds < 0) {
             throw invalid("durationSeconds must be non-negative");
         }

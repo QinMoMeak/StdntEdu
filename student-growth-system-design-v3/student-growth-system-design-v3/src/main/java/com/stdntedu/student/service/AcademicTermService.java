@@ -56,7 +56,11 @@ public class AcademicTermService {
     @Transactional
     public AcademicTermDto create(AcademicTermCreateRequest request) {
         Long studentId = ids.toLong(request.getStudentId());
-        requireStudent(studentId);
+        if (Boolean.TRUE.equals(request.getCurrent())) {
+            lockStudent(studentId);
+        } else {
+            requireStudent(studentId);
+        }
         validateAcademicTerm(request.getStageId(), request.getGradeId(), request.getStartDate(), request.getEndDate());
         ensureNotDuplicate(studentId, request.getAcademicYear(), request.getSemester().getValue(), null);
         AcademicTermEntity entity = converter.fromCreate(request);
@@ -79,6 +83,7 @@ public class AcademicTermService {
         if (!Objects.equals(entity.getVersion(), request.getVersion())) {
             throw new BusinessException("DATA_VERSION_CONFLICT", "academic term version conflict", HttpStatus.CONFLICT);
         }
+        if (Boolean.TRUE.equals(request.getCurrent())) lockStudent(entity.getStudentId());
         validateAcademicTerm(request.getStageId(), request.getGradeId(), request.getStartDate(), request.getEndDate());
         ensureNotDuplicate(entity.getStudentId(), request.getAcademicYear(), request.getSemester().getValue(), id);
         converter.applyUpdate(request, entity);
@@ -91,6 +96,10 @@ public class AcademicTermService {
 
     private void requireStudent(Long id) {
         if (students.selectById(id) == null) throw new ResourceNotFoundException("student not found");
+    }
+
+    private void lockStudent(Long id) {
+        if (students.selectIdForUpdate(id) == null) throw new ResourceNotFoundException("student not found");
     }
 
     private void validateAcademicTerm(String stageId, String gradeId, LocalDate startDate, LocalDate endDate) {

@@ -8,31 +8,34 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.stdntedu.common.exception.BusinessException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 @Service
 public class OriginalFileStorage {
+    private static final Logger LOG = LoggerFactory.getLogger(OriginalFileStorage.class);
     private final Path root;
 
-    public OriginalFileStorage(@Value("${app.ai.extraction.storage-root:#{systemProperties['java.io.tmpdir'] + '/stdntedu-ai-extraction/attachments'}}")
-            String root) {
-        this.root = Path.of(root).toAbsolutePath().normalize();
+    public OriginalFileStorage(AttachmentStorageValidator validator) {
+        this.root = validator.root();
     }
 
     public List<StoredOriginal> persist(PreparedExtraction extraction) {
         List<StoredOriginal> stored = new ArrayList<>();
         try {
-            Files.createDirectories(root);
             for (PreparedFile file : extraction.files()) {
                 Path target = root.resolve(UUID.randomUUID().toString().replace("-", "") + extension(file.mediaType()))
                         .normalize();
                 if (!target.startsWith(root)) throw new IOException("invalid storage target");
+                StoredOriginal original = new StoredOriginal(file, target);
+                stored.add(original);
                 Files.copy(file.path(), target, StandardCopyOption.COPY_ATTRIBUTES);
-                stored.add(new StoredOriginal(file, target));
             }
             return List.copyOf(stored);
-        } catch (IOException ex) {
+        } catch (IOException | RuntimeException ex) {
             cleanup(stored);
             throw AiExtractionLimits.invalid("original upload could not be persisted");
         }
@@ -41,8 +44,36 @@ public class OriginalFileStorage {
     public void cleanup(List<StoredOriginal> files) {
         if (files == null) return;
         for (StoredOriginal file : files) {
-            try { Files.deleteIfExists(file.storagePath()); } catch (IOException ignored) { }
+            try {
+                Files.deleteIfExists(file.storagePath());
+            } catch (IOException ex) {
+                LOG.warn("Extraction attachment compensation cleanup failed");
+            }
         }
+    }
+
+    public Path requireStoredFile(Path candidate) {
+        try {
+            Path normalized = candidate.toAbsolutePath().normalize();
+            if (!normalized.startsWith(root)) throw missing();
+            Path real = normalized.toRealPath();
+            if (!real.startsWith(root) || !Files.isRegularFile(real)) throw missing();
+            return real;
+        } catch (IOException | RuntimeException ex) {
+            if (ex instanceof BusinessException business) throw business;
+            throw missing();
+        }
+    }
+
+    public Path root() { return root; }
+
+    public boolean isManagedPath(Path candidate) {
+        return candidate != null && candidate.toAbsolutePath().normalize().startsWith(root);
+    }
+
+    private BusinessException missing() {
+        return new BusinessException("STORAGE_FILE_MISSING", "stored extraction attachment is unavailable",
+                HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     private String extension(DetectedMediaType type) {

@@ -18,6 +18,7 @@ import com.stdntedu.common.validation.IdConverter;
 import com.stdntedu.generated.model.Student;
 import com.stdntedu.generated.model.StudentCreate;
 import com.stdntedu.generated.model.StudentUpdate;
+import com.stdntedu.resource.service.SystemTimezoneProvider;
 import com.stdntedu.student.converter.StudentConverter;
 import com.stdntedu.student.entity.StudentEntity;
 import com.stdntedu.student.mapper.StudentMapper;
@@ -34,14 +35,16 @@ public class StudentService {
     private final GradeMapper grades;
     private final StudentConverter converter;
     private final IdConverter ids;
+    private final SystemTimezoneProvider time;
 
     public StudentService(StudentMapper students, StageMapper stages, GradeMapper grades, StudentConverter converter,
-            IdConverter ids) {
+            IdConverter ids, SystemTimezoneProvider time) {
         this.students = students;
         this.stages = stages;
         this.grades = grades;
         this.converter = converter;
         this.ids = ids;
+        this.time = time;
     }
 
     @Transactional(readOnly = true)
@@ -110,13 +113,13 @@ public class StudentService {
     }
 
     private void validateBirthday(LocalDate birthday) {
-        if (birthday != null && birthday.isAfter(LocalDate.now())) {
+        if (birthday != null && birthday.isAfter(time.today())) {
             throw new BusinessException("VALIDATION_ERROR", "birthday cannot be in the future", HttpStatus.UNPROCESSABLE_ENTITY);
         }
     }
 
     private String generateStudentCode() {
         String suffix = String.format("%06d", ThreadLocalRandom.current().nextInt(1_000_000));
-        return "STU" + LocalDateTime.now().format(CODE_DATE) + suffix;
+        return "STU" + time.localDateTime().format(CODE_DATE) + suffix;
     }
 }

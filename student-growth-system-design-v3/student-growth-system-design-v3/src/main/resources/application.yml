@@ -8,11 +8,29 @@ spring:
       max-file-size: 50MB
       max-request-size: 270MB
       file-size-threshold: 0B
+  datasource:
+    hikari:
+      connection-init-sql: SET time_zone = '+08:00'
 app:
   version: 0.2.0-SNAPSHOT
   ai:
+    provider:
+      max-response-bytes: 4194304
+    extraction:
+      executor:
+        core-size: 1
+        max-size: 2
+        queue-capacity: 20
+      pending-rescan:
+        batch-size: 50
+        fixed-delay-ms: 30000
+        initial-delay-ms: 30000
     study-plan:
       executor:
         core-size: 2
         max-size: 4
         queue-capacity: 100
+      pending-rescan:
+        batch-size: 50
+        fixed-delay-ms: 30000
+        initial-delay-ms: 30000

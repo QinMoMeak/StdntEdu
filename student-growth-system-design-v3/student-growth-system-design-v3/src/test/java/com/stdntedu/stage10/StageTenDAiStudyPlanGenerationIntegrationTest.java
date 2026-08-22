@@ -101,6 +101,9 @@ class StageTenDAiStudyPlanGenerationIntegrationTest {
         registry.add("spring.datasource.username", MYSQL::getUsername);
         registry.add("spring.datasource.password", MYSQL::getPassword);
         registry.add("STDNTEDU_AI_SECRET_MASTER_KEY", () -> MASTER_KEY);
+        registry.add("app.ai.provider.max-response-bytes", () -> 2048);
+        registry.add("app.ai.extraction.pending-rescan.initial-delay-ms", () -> 3600000);
+        registry.add("app.ai.study-plan.pending-rescan.initial-delay-ms", () -> 3600000);
     }
 
     @BeforeAll
@@ -436,6 +439,19 @@ class StageTenDAiStudyPlanGenerationIntegrationTest {
     }
 
     @Test
+    void stage11cOversizedProviderResponseFailsWithStableSanitizedCode() {
+        MODE.set(Mode.OVERSIZED);
+        AiAnalysisDto accepted = generation.generate("stage11c-oversized-study-plan", request(modelId));
+
+        awaitStatus(Long.parseLong(accepted.getId()), "FAILED");
+
+        AiAnalysisDto failed = analysisQueries.get(accepted.getId());
+        assertThat(failed.getErrorCode()).isEqualTo("PROVIDER_RESPONSE_TOO_LARGE");
+        assertThat(failed.getErrorMessage()).doesNotContain("raw-provider-secret");
+        assertThat(count("study_plan")).isZero();
+    }
+
+    @Test
     void scenarios66_72_recoveryRedispatchesResetsRunningAndBlocksExistingPlan() {
         AiAnalysisEntity reset = pending(request(modelId), "stage10d-recovery-reset");
         assertThat(analysisMapper.claim(reset.getId())).isEqualTo(1);
@@ -473,6 +489,8 @@ class StageTenDAiStudyPlanGenerationIntegrationTest {
         AiStudyPlanGenerationDispatcher rejectedDispatcher = new AiStudyPlanGenerationDispatcher(rejecting, worker);
         assertThat(rejectedDispatcher.dispatch(rejected.getId())).isFalse();
         assertThat(analysisStatus(rejected.getId())).isEqualTo("PENDING");
+        recovery.rescanPending();
+        awaitStatus(rejected.getId(), "SUCCESS");
     }
 
     @Test
@@ -687,6 +705,13 @@ class StageTenDAiStudyPlanGenerationIntegrationTest {
             try { releaseProvider.await(5, TimeUnit.SECONDS); }
             catch (InterruptedException ex) { Thread.currentThread().interrupt(); }
         }
+        if (mode == Mode.OVERSIZED) {
+            byte[] bytes = ("raw-provider-secret" + "x".repeat(4096)).getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, bytes.length);
+            try { exchange.getResponseBody().write(bytes); } catch (IOException ignored) { }
+            exchange.close();
+            return;
+        }
         int status = mode == Mode.HTTP_500 ? 500 : mode == Mode.AUTH_FAILURE ? 401 : 200;
         String content = switch (mode) {
             case MALFORMED -> "{not-json";
@@ -711,5 +736,5 @@ class StageTenDAiStudyPlanGenerationIntegrationTest {
         exchange.close();
     }
 
-    private enum Mode { SUCCESS, DELAYED, MALFORMED, MARKDOWN, HTTP_500, AUTH_FAILURE, NO_USAGE }
+    private enum Mode { SUCCESS, DELAYED, MALFORMED, MARKDOWN, HTTP_500, AUTH_FAILURE, NO_USAGE, OVERSIZED }
 }

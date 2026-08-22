@@ -36,7 +36,7 @@ public interface StudentResourceQueryMapper {
               LEFT JOIN subject ON subject.id = resource.subject_id
             """;
 
-    @Select(SELECT_COLUMNS + " WHERE assignment.id = #{assignmentId}")
+    @Select(SELECT_COLUMNS + " WHERE assignment.id = #{assignmentId} AND resource.deleted = 0")
     StudentResourceRow selectDetail(@Param("assignmentId") Long assignmentId);
 
     @Select("""
@@ -45,6 +45,7 @@ public interface StudentResourceQueryMapper {
               FROM student_resource_assignment assignment
               JOIN learning_resource resource ON resource.id = assignment.resource_id
              WHERE assignment.student_id = #{studentId}
+               AND resource.deleted = 0
             <if test='status != null'> AND assignment.status = #{status}</if>
             <if test='subjectId != null'> AND resource.subject_id = #{subjectId}</if>
             </script>
@@ -56,6 +57,7 @@ public interface StudentResourceQueryMapper {
             <script>
             """ + SELECT_COLUMNS + """
              WHERE assignment.student_id = #{studentId}
+               AND resource.deleted = 0
             <if test='status != null'> AND assignment.status = #{status}</if>
             <if test='subjectId != null'> AND resource.subject_id = #{subjectId}</if>
              ORDER BY assignment.assigned_time DESC, assignment.id DESC

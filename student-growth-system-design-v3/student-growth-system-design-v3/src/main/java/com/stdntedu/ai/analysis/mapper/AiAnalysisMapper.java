@@ -71,10 +71,11 @@ public interface AiAnalysisMapper extends BaseMapper<AiAnalysisEntity> {
 
     @Select("""
             SELECT id FROM ai_analysis
-             WHERE business_type='STUDY_PLAN_GENERATION' AND status=#{status}
-             ORDER BY create_time ASC,id ASC
+             WHERE business_type='STUDY_PLAN_GENERATION' AND status=#{status} AND id>#{afterId}
+             ORDER BY id ASC LIMIT #{limit}
             """)
-    List<Long> selectIdsByStatus(@Param("status") String status);
+    List<Long> selectIdsByStatusAfter(@Param("status") String status,
+            @Param("afterId") Long afterId, @Param("limit") int limit);
 
     @Update("""
             UPDATE ai_analysis

@@ -1,8 +1,6 @@
 package com.stdntedu.ai.extraction.converter;
 
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.List;
 
 import com.stdntedu.ai.extraction.entity.AiExtractionQuestionEntity;
@@ -16,14 +14,18 @@ import com.stdntedu.generated.model.AiKnowledgeCandidateDto;
 import com.stdntedu.generated.model.AiTask;
 import com.stdntedu.generated.model.AiTaskStatus;
 import com.stdntedu.generated.model.WrongSource;
+import com.stdntedu.resource.service.SystemTimezoneProvider;
 import org.springframework.stereotype.Component;
 
 @Component
 public class AiExtractionConverter {
-    private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
     private final IdConverter ids;
+    private final SystemTimezoneProvider time;
 
-    public AiExtractionConverter(IdConverter ids) { this.ids = ids; }
+    public AiExtractionConverter(IdConverter ids, SystemTimezoneProvider time) {
+        this.ids = ids;
+        this.time = time;
+    }
 
     public AiTask task(AiExtractionTaskEntity entity, int fileCount, int questionCount) {
         return new AiTask().taskId(ids.toString(entity.getId())).studentId(ids.toString(entity.getStudentId()))
@@ -62,6 +64,6 @@ public class AiExtractionConverter {
     }
 
     private java.time.OffsetDateTime offset(LocalDateTime value) {
-        return value == null ? null : value.atZone(ZONE).toOffsetDateTime();
+        return time.toOffsetDateTime(value);
     }
 }

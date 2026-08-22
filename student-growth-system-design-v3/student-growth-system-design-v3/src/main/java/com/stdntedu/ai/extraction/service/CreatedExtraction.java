@@ -1,3 +1,5 @@
 package com.stdntedu.ai.extraction.service;
 
-public record CreatedExtraction(Long taskId) { }
+import com.stdntedu.ai.extraction.entity.AiExtractionTaskEntity;
+
+public record CreatedExtraction(Long taskId, AiExtractionTaskEntity task) { }

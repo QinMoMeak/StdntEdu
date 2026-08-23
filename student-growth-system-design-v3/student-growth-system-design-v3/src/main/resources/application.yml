@@ -5,8 +5,8 @@ spring:
     active: local
   servlet:
     multipart:
-      max-file-size: 51MB
-      max-request-size: 270MB
+      max-file-size: 501MB
+      max-request-size: 501MB
       file-size-threshold: 0B
   datasource:
     hikari:
@@ -34,3 +34,12 @@ app:
         batch-size: 50
         fixed-delay-ms: 30000
         initial-delay-ms: 30000
+  transfer:
+    executor:
+      core-size: 1
+      max-size: 2
+      queue-capacity: 20
+    pending-rescan:
+      batch-size: 50
+      fixed-delay-ms: 30000
+      initial-delay-ms: 30000

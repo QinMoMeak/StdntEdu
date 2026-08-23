@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class StudentService {
     private static final DateTimeFormatter CODE_DATE = DateTimeFormatter.BASIC_ISO_DATE;
+    private static final int CODE_ATTEMPTS = 5;
     private final StudentMapper students;
     private final StageMapper stages;
     private final GradeMapper grades;
@@ -58,17 +59,24 @@ public class StudentService {
         String name = normalizedName(request.getName());
         validateBirthday(request.getBirthday());
         validateStageGrade(request.getCurrentStageId(), request.getCurrentGradeId());
-        StudentEntity entity = converter.fromCreate(request);
-        entity.setName(name);
-        entity.setStudentCode(generateStudentCode());
-        entity.setDeleted(false);
-        entity.setVersion(0);
-        try {
-            students.insert(entity);
-        } catch (DuplicateKeyException ex) {
-            throw new DataConflictException("student code already exists");
+        for (int attempt = 1; attempt <= CODE_ATTEMPTS; attempt++) {
+            StudentEntity entity = converter.fromCreate(request);
+            entity.setName(name);
+            entity.setStudentCode(generateStudentCode());
+            entity.setDeleted(false);
+            entity.setVersion(0);
+            try {
+                students.insert(entity);
+                return converter.toDto(entity);
+            } catch (DuplicateKeyException ex) {
+                if (!isStudentCodeConflict(ex)) throw new DataConflictException("student data already exists");
+                if (attempt == CODE_ATTEMPTS) {
+                    throw new BusinessException("STUDENT_CODE_GENERATION_FAILED",
+                            "student code could not be allocated", HttpStatus.INTERNAL_SERVER_ERROR);
+                }
+            }
         }
-        return converter.toDto(entity);
+        throw new IllegalStateException("unreachable");
     }
 
     @Transactional(readOnly = true)
@@ -118,8 +126,18 @@ public class StudentService {
         }
     }
 
-    private String generateStudentCode() {
+    String generateStudentCode() {
         String suffix = String.format("%06d", ThreadLocalRandom.current().nextInt(1_000_000));
         return "STU" + time.localDateTime().format(CODE_DATE) + suffix;
+    }
+
+    private boolean isStudentCodeConflict(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof java.sql.SQLException sql && sql.getErrorCode() == 1062
+                    && sql.getMessage() != null && sql.getMessage().toLowerCase().contains("student_code")) {
+                return true;
+            }
+        }
+        return false;
     }
 }

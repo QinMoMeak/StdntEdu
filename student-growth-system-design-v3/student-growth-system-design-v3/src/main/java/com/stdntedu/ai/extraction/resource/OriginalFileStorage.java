@@ -1,10 +1,16 @@
 package com.stdntedu.ai.extraction.resource;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -42,6 +48,34 @@ public class OriginalFileStorage {
         }
     }
 
+    public ManagedFile persist(InputStream input, String suffix, long maxBytes) {
+        if (suffix == null || !suffix.matches("\\.[a-z0-9]{1,8}")) {
+            throw new IllegalArgumentException("invalid storage suffix");
+        }
+        Path target = root.resolve(UUID.randomUUID().toString().replace("-", "") + suffix).normalize();
+        if (!target.startsWith(root)) throw new IllegalArgumentException("invalid storage target");
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            long size = 0;
+            byte[] buffer = new byte[64 * 1024];
+            try (OutputStream output = Files.newOutputStream(target, StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE)) {
+                for (int read; (read = input.read(buffer)) >= 0;) {
+                    if (read == 0) continue;
+                    size += read;
+                    if (size > maxBytes) throw new IOException("file exceeds limit");
+                    digest.update(buffer, 0, read);
+                    output.write(buffer, 0, read);
+                }
+            }
+            return new ManagedFile(target, size, HexFormat.of().formatHex(digest.digest()));
+        } catch (IOException | NoSuchAlgorithmException ex) {
+            cleanup(target);
+            throw new BusinessException("STORAGE_WRITE_FAILED", "file could not be persisted",
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     public void cleanup(List<StoredOriginal> files) {
         if (files == null) return;
         for (StoredOriginal file : files) {
@@ -50,6 +84,15 @@ public class OriginalFileStorage {
             } catch (IOException ex) {
                 LOG.warn("Attachment compensation cleanup failed");
             }
+        }
+    }
+
+    public void cleanup(Path path) {
+        if (!isManagedPath(path)) return;
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException ex) {
+            LOG.warn("Attachment compensation cleanup failed");
         }
     }
 
@@ -86,4 +129,6 @@ public class OriginalFileStorage {
             case PDF -> ".pdf";
         };
     }
+
+    public record ManagedFile(Path path, long size, String sha256) { }
 }

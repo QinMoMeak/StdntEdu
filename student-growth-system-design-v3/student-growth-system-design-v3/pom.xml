@@ -26,6 +26,10 @@
         <springdoc.version>2.6.0</springdoc.version>
         <pdfbox.version>3.0.8</pdfbox.version>
         <twelvemonkeys.version>3.14.0</twelvemonkeys.version>
+        <poi.version>5.5.1</poi.version>
+        <commons-csv.version>1.14.1</commons-csv.version>
+        <commons-compress.version>1.28.0</commons-compress.version>
+        <commons-lang3.version>3.18.0</commons-lang3.version>
     </properties>
 
     <dependencies>
@@ -80,6 +84,21 @@
             <groupId>com.twelvemonkeys.imageio</groupId>
             <artifactId>imageio-webp</artifactId>
             <version>${twelvemonkeys.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>${commons-csv.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>${commons-compress.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>

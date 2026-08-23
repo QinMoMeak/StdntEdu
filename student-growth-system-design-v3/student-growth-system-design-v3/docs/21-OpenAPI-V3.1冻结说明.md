@@ -499,3 +499,34 @@ OpenAPI V3.10.0 是 Stage12B Attachment 实现后的新契约基线。后续开�
 本轮 `swagger-cli`、Redocly 和 OpenAPI Generator validate 均通过；Java 模型、TypeScript Fetch 与
 Spring 接口生成通过。`mvnw.cmd clean test` 和 `clean package` 均以 367/0/0/0 通过，Flyway
 V1-V20、47 张业务表和 31 项 system_config 保持不变。详细统计见 `api/openapi-validation-report.md`。
+
+## V3.12.0 与 Flyway V21 基线
+
+OpenAPI V3.12.0 是 Stage12D 完成后的 Import / Export 契约基线。Flyway 数据库基线同步升级为 V21；V1-V20 继续冻结。V21 不新增业务表和系统配置，只补齐 `import_task` 与 `export_task` 的持久任务生命周期，业务表仍为 47，`system_config` 仍为 31。
+
+### Import
+
+1. 公开类型固定为 `STUDENT`、`KNOWLEDGE`、`LEARNING_RESOURCE`、`SCORE`、`WRONG_QUESTION`，不提供任意表或 FULL_DATA 导入。
+2. `STUDENT`、`KNOWLEDGE`、`LEARNING_RESOURCE` 支持 CSV/XLSX/JSON/ZIP；`SCORE`、`WRONG_QUESTION` 只支持 JSON/ZIP，并必须显式绑定 studentId 和校验逐行业主。
+3. 导入为两阶段任务：create 只持久化原文件并异步解析预览，不写业务数据；confirm 使用 Idempotency-Key 后进入 `CONFIRM_PENDING`，再异步、事务化调用既有领域 Service 写入。
+4. V1 只支持 create-only 与 `DuplicateStrategy.REJECT`。`atomic=true` 时任一选中行或业务写入失败均不提交；`atomic=false + skipInvalidRows=true` 可跳过解析无效行，但全部合法行仍在一个事务中提交。
+5. 状态固定为 `UPLOADED`、`VALIDATING`、`PREVIEW_READY`、`CONFIRM_PENDING`、`IMPORTING`、`SUCCESS`、`PARTIAL_SUCCESS`、`FAILED`、`CANCELLED`、`EXPIRED`。重试最多 3 次，并开启新的确认幂等轮次。
+
+### Export
+
+1. ExportType 保留冻结的 14 个公开业务类型，格式只允许 CSV、XLSX、JSON；CSV 只允许单个具体类型。
+2. `FULL_DATA` 只表示公开业务数据集合，不导出 Attachment 文件、AI Secret、`system_config`、SQL dump 或备份镜像。
+3. 状态固定为 `PENDING`、`RUNNING`、`SUCCESS`、`FAILED`、`CANCELLED`、`EXPIRED`，不复用含 `PARTIAL_SUCCESS` 的共享 AsyncStatus。
+4. Worker 使用 DB CAS 领取任务，流式查询并生成持久 artifact；下载使用持久存储流，不在成功下载后自动删除文件。
+
+### 文件与恢复边界
+
+普通上传文件最大 50 MiB，ZIP 最大 500 MiB。ZIP 最多 20 个文件条目，单条目解压最大 50 MiB，总解压最大 200 MiB，压缩比最大 100:1；禁止目录穿越、绝对/盘符/UNC 路径、symlink 和嵌套 ZIP。原始输入、错误报告和导出 artifact 复用 Stage11B 的持久存储根目录，临时解析/生成文件才允许使用系统临时目录。
+
+Import 与 Export 都采用 commit 后 dispatch、有限线程池、DB CAS、周期 PENDING rescan 和启动恢复。VALIDATING 可恢复为 UPLOADED；尚未提交领域事务的 IMPORTING 可恢复为 CONFIRM_PENDING；RUNNING export 可恢复为 PENDING。取消后的任务不能被 worker 覆盖为 SUCCESS。
+
+Student 自动 code 生成在数据库唯一冲突时最多重试 5 次；仅识别 MySQL 1062 且约束消息指向 `student_code`，其他唯一冲突保持原有 409 语义，耗尽后返回稳定内部错误。
+
+新增解析依赖为 Apache POI 5.5.1、Commons CSV 1.14.1、Commons Compress 1.28.0，均为 Apache-2.0；`commons-lang3` 固定为 3.18.0 以满足 Compress 运行时要求。Stage12E Backup/Restore、GrowthReport 和前端不属于本基线。
+
+最终 `mvnw.cmd clean test` 与 `mvnw.cmd clean package` 均以 400/0/0/0 通过；Swagger、Redocly、Generator validate、Java、TypeScript Fetch 和 Maven Spring generation 均通过。Testcontainers MySQL 8 最终版本为 v21，业务表 47，`system_config` 31。

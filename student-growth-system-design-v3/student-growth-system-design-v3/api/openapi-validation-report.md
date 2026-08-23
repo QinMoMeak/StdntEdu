@@ -515,3 +515,17 @@ Java 与 TypeScript 抽查模型均生成成功：`StudentDto`、`ExamDto`、`Wr
 ## 尚未解决的问题
 
 无契约或迁移阻塞问题。StudentResource、StudyPlan 和 Dashboard 业务实现不属于本轮，尚未开始；AI 模块完成前 Dashboard 的 `aiSuggestions` 固定为空数组。`coverAttachmentId` 的附件关系编码及唯一性规则尚未冻结，当前版本只保留字段并拒绝非空值。OpenAPI Generator 对 OpenAPI 3.1 的 beta 提示及既有未使用 Schema 建议不影响 validate、生成或 Maven 编译结果。Node 24 下 npx wrapper 仍无法稳定启动，已通过同版本 Generator CLI 7.10.0 JAR 完成 validate 和试生成。真实 JWT 鉴权仍属于后续阶段。
+
+## V3.12.0 Import / Export 验证
+
+- OpenAPI 文件共 769 行，包含 86 个路径模板、116 个操作、116 个唯一 operationId、161 个 Schema、70 个 Response 组件和 21 个 Parameter 组件；重复 operationId 和 PathVariable 缺口均为 0。
+- Import 冻结为 `STUDENT`、`KNOWLEDGE`、`LEARNING_RESOURCE`、`SCORE`、`WRONG_QUESTION`。前三类支持 CSV/XLSX/JSON/ZIP，后两类只支持 JSON/ZIP；均为 create-only，V1 的 `DuplicateStrategy` 仅允许 `REJECT`。
+- Import 使用上传解析预览与确认写入两阶段。确认进入 `CONFIRM_PENDING` 后异步执行，Idempotency-Key 与规范化请求 SHA-256 共同保证重放安全；合法行的领域写入在单个事务中完成。
+- Export 保留 14 个公开业务类型，使用独立 `ExportTaskStatus`；仅支持 CSV、XLSX、JSON。`FULL_DATA` 是公开业务数据集合，不包含附件文件、AI Secret、`system_config` 或数据库 dump。
+- 上传限制为普通文件 50 MiB、ZIP 500 MiB；ZIP 解压限制为 20 个条目、单条目 50 MiB、总量 200 MiB、压缩比 100:1，并拒绝目录穿越、绝对/盘符/UNC 路径、symlink 和 nested ZIP。
+- CSV 固定 UTF-8、RFC 4180、必需唯一 header；导出不写 BOM，并对 `= + - @ TAB CR` 起始值添加单引号。XLSX 使用 POI，限制 20 sheets、10000 rows、100 columns、65536 字符并拒绝公式。JSON 顶层为数组，限制 10000 records、深度 20 和字符串 65536。
+- Swagger CLI 校验通过；Redocly errors 0、warnings 0；OpenAPI Generator 7.10.0 JAR validate、Java client、TypeScript Fetch 和 Maven Spring generation 均通过。Generator validate 仅保留 7 个既有未使用模型建议，不是解析或生成错误。
+- Java/TypeScript 抽查确认 ImportTask、ExportTask 的数据库 ID 分别为 `String` / `string`，任务计数和进度为 `Integer` / `number`，Import/Export 状态生成独立枚举。
+- Flyway 数据库基线升级到 V21；业务表仍为 47，`system_config` 仍为 31。V21 只补齐 `import_task` / `export_task` 生命周期、范围、计数、进度、持久文件引用和状态约束，两份迁移逐字一致。
+- Stage12D 完成 12 个公开 Import/Export operation；Controller 实现操作数为 100，剩余默认 501 为 16。Stage12E Backup/Restore 与 GrowthReport 仍未实现。
+- `mvnw.cmd clean test` 与 `mvnw.cmd clean package` 均以 400 tests、0 failures、0 errors、0 skipped 通过；Testcontainers MySQL 8 从空库执行 V1-V21 成功，Spring Boot 可执行 JAR 打包成功。

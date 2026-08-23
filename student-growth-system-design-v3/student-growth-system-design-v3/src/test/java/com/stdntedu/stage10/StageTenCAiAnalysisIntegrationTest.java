@@ -299,7 +299,7 @@ class StageTenCAiAnalysisIntegrationTest {
     @Test
     void scenarios49_55_databaseAndGeneratedContractRemainAtFrozenBaseline() {
         assertThat(jdbc.queryForObject("SELECT version FROM flyway_schema_history WHERE success=1 ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("20");
+                String.class)).isEqualTo("21");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name<>'flyway_schema_history'",
                 Integer.class)).isEqualTo(47);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM system_config", Integer.class)).isEqualTo(31);

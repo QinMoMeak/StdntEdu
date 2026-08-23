@@ -270,17 +270,20 @@ class FlywayMigrationIntegrationTest {
             v1ToV19Checksums = appliedChecksums(v19Flyway, 19);
         }
 
-        Flyway flyway = Flyway.configure()
+        Flyway v20Flyway = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration")
+                .target(MigrationVersion.fromVersion("20"))
                 .load();
-        flyway.migrate();
+        v20Flyway.migrate();
+
+        List<String> schemaBeforeV21;
+        Map<String, Integer> v1ToV20Checksums;
 
         try (Connection connection = DriverManager.getConnection(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
-            assertExecutedVersions(flyway);
-            assertEquals("20", flyway.info().current().getVersion().toString());
-            assertEquals(v1ToV19Checksums, appliedChecksums(flyway, 19));
+            assertEquals("20", v20Flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV19Checksums, appliedChecksums(v20Flyway, 19));
             assertEquals(47, countBusinessTables(connection));
             assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
             assertEquals(businessTablesBeforeV20, businessTableNames(connection));
@@ -298,6 +301,64 @@ class FlywayMigrationIntegrationTest {
             assertAiV20Definition(connection);
             assertSchemaFullAiV20Matches(connection);
             assertV20MigrationCopiesAndHashesMatch();
+            schemaBeforeV21 = schemaSignatureWithoutImportExport(connection);
+            v1ToV20Checksums = appliedChecksums(v20Flyway, 20);
+        }
+
+        Flyway flyway = Flyway.configure()
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .locations("classpath:db/migration")
+                .load();
+        flyway.migrate();
+
+        try (Connection connection = DriverManager.getConnection(
+                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
+            assertExecutedVersions(flyway);
+            assertEquals("21", flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV20Checksums, appliedChecksums(flyway, 20));
+            assertEquals(47, countBusinessTables(connection));
+            assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
+            assertEquals(schemaBeforeV21, schemaSignatureWithoutImportExport(connection));
+            assertImportExportV21Definition(connection);
+            assertSchemaFullImportExportV21Matches(connection);
+            assertV21MigrationCopiesAndHashesMatch();
+        }
+    }
+
+    @Test
+    void preservesExistingTasksWhenMigratingFromV20() throws Exception {
+        try (MySQLContainer<?> mysql = new MySQLContainer<>(mysqlImage())
+                .withDatabaseName("student_growth")
+                .withUsername("student_growth")
+                .withPassword("student_growth")) {
+            mysql.start();
+            Flyway v20 = Flyway.configure().dataSource(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())
+                    .locations("classpath:db/migration").target(MigrationVersion.fromVersion("20")).load();
+            v20.migrate();
+            try (Connection connection = DriverManager.getConnection(
+                    mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword());
+                    Statement statement = connection.createStatement()) {
+                statement.executeUpdate("""
+                        INSERT INTO import_task(id,task_code,import_type,status,total_rows,valid_rows,invalid_rows)
+                        VALUES(900021,'IMP-V21-LEGACY','STUDENT','UPLOADED',3,2,1)
+                        """);
+                statement.executeUpdate("""
+                        INSERT INTO export_task(id,task_code,export_types_json,export_format,status)
+                        VALUES(900021,'EXP-V21-LEGACY',JSON_ARRAY('STUDENT'),'JSON','PENDING')
+                        """);
+            }
+
+            Flyway.configure().dataSource(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())
+                    .locations("classpath:db/migration").load().migrate();
+            try (Connection connection = DriverManager.getConnection(
+                    mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword())) {
+                assertEquals(1, queryInt(connection, "SELECT COUNT(*) FROM import_task WHERE id=900021"));
+                assertEquals(3, queryInt(connection, "SELECT total_rows FROM import_task WHERE id=900021"));
+                assertEquals(1, queryInt(connection, "SELECT input_file_count FROM import_task WHERE id=900021"));
+                assertEquals(0, queryInt(connection, "SELECT progress_percent FROM import_task WHERE id=900021"));
+                assertEquals(1, queryInt(connection, "SELECT COUNT(*) FROM export_task WHERE id=900021"));
+                assertEquals(0, queryInt(connection, "SELECT progress_percent FROM export_task WHERE id=900021"));
+            }
         }
     }
 
@@ -730,7 +791,7 @@ class FlywayMigrationIntegrationTest {
                 .toList();
 
         assertEquals(
-                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"),
+                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"),
                 versions);
     }
 
@@ -898,6 +959,71 @@ class FlywayMigrationIntegrationTest {
                   AND table_name <> 'study_plan_action_history'
                 ORDER BY table_name, ordinal_position
                 """);
+    }
+
+    private List<String> schemaSignatureWithoutImportExport(Connection connection) throws SQLException {
+        return queryStrings(connection, """
+                SELECT CONCAT_WS('|', table_name, column_name, ordinal_position, column_type,
+                                  is_nullable, COALESCE(column_default, '<NULL>'), column_key, extra)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name <> 'flyway_schema_history'
+                  AND table_name NOT IN ('import_task', 'export_task')
+                ORDER BY table_name, ordinal_position
+                """);
+    }
+
+    private void assertImportExportV21Definition(Connection connection) throws SQLException {
+        for (String column : List.of("student_id", "options_json", "confirm_request_json",
+                "confirm_request_hash", "input_file_count", "warning_rows", "imported_rows",
+                "skipped_rows", "failed_rows", "progress_percent", "retry_count", "error_code",
+                "error_message", "started_time", "finished_time")) {
+            assertEquals(1, queryInt(connection, """
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_schema=DATABASE() AND table_name='import_task' AND column_name=?
+                    """, column));
+        }
+        for (String column : List.of("progress_percent", "error_code", "started_time", "finished_time")) {
+            assertEquals(1, queryInt(connection, """
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_schema=DATABASE() AND table_name='export_task' AND column_name=?
+                    """, column));
+        }
+        assertConstraint(connection, "import_task", "fk_it_student", "FOREIGN KEY");
+        for (String constraint : List.of("chk_it_status_v21", "chk_it_type_v21",
+                "chk_it_counts_v21", "chk_it_confirm_hash_v21")) {
+            assertConstraint(connection, "import_task", constraint, "CHECK");
+        }
+        assertCheckContains(connection, "chk_it_status_v21", List.of(
+                "UPLOADED", "VALIDATING", "PREVIEW_READY", "CONFIRM_PENDING", "IMPORTING",
+                "SUCCESS", "PARTIAL_SUCCESS", "FAILED", "CANCELLED", "EXPIRED"));
+        assertCheckContains(connection, "chk_it_type_v21", List.of(
+                "STUDENT", "KNOWLEDGE", "LEARNING_RESOURCE", "SCORE", "WRONG_QUESTION"));
+        for (String constraint : List.of("chk_et_status_v21", "chk_et_format_v21", "chk_et_progress_v21")) {
+            assertConstraint(connection, "export_task", constraint, "CHECK");
+        }
+        assertCheckContains(connection, "chk_et_status_v21",
+                List.of("PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED", "EXPIRED"));
+        assertCheckContains(connection, "chk_et_format_v21", List.of("CSV", "XLSX", "JSON"));
+        assertEquals(List.of("int|NO|0"), columnDefinition(connection, "import_task", "progress_percent"));
+        assertEquals(List.of("int|NO|0"), columnDefinition(connection, "export_task", "progress_percent"));
+    }
+
+    private void assertSchemaFullImportExportV21Matches(Connection connection) throws Exception {
+        List<String> lines = Files.readAllLines(Path.of("database", "schema-full.sql"));
+        String imports = lines.stream().filter(line -> line.startsWith("CREATE TABLE import_task("))
+                .findFirst().orElseThrow();
+        String exports = lines.stream().filter(line -> line.startsWith("CREATE TABLE export_task("))
+                .findFirst().orElseThrow();
+        for (String token : List.of("student_id BIGINT", "CONFIRM_PENDING", "options_json JSON",
+                "confirm_request_hash CHAR(64)", "retry_count INT", "chk_it_status_v21")) {
+            assertTrue(imports.contains(token));
+        }
+        for (String token : List.of("progress_percent INT", "chk_et_status_v21",
+                "chk_et_format_v21", "'CSV','XLSX','JSON'")) {
+            assertTrue(exports.contains(token));
+        }
+        assertEquals(47, countBusinessTables(connection));
     }
 
     private List<String> studyLogColumnNames(Connection connection) throws SQLException {
@@ -1512,6 +1638,14 @@ class FlywayMigrationIntegrationTest {
         Path design = Path.of("database", "flyway", "V20__complete_ai_analysis_lifecycle.sql");
         Path runtime = Path.of("src", "main", "resources", "db", "migration",
                 "V20__complete_ai_analysis_lifecycle.sql");
+        assertArrayEquals(Files.readAllBytes(design), Files.readAllBytes(runtime));
+        assertEquals(sha256(design), sha256(runtime));
+    }
+
+    private void assertV21MigrationCopiesAndHashesMatch() throws Exception {
+        Path design = Path.of("database", "flyway", "V21__complete_import_export_lifecycle.sql");
+        Path runtime = Path.of("src", "main", "resources", "db", "migration",
+                "V21__complete_import_export_lifecycle.sql");
         assertArrayEquals(Files.readAllBytes(design), Files.readAllBytes(runtime));
         assertEquals(sha256(design), sha256(runtime));
     }

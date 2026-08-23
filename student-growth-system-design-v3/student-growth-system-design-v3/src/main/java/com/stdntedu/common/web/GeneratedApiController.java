@@ -25,6 +25,8 @@ import com.stdntedu.generated.model.AiTaskStatus;
 import com.stdntedu.generated.model.AiConfirm;
 import com.stdntedu.generated.model.AiExtractionQuestionUpdateRequest;
 import com.stdntedu.generated.model.CancelAiExtractionRequest;
+import com.stdntedu.generated.model.CancelExportRequest;
+import com.stdntedu.generated.model.CancelImportRequest;
 import com.stdntedu.generated.model.RetryAiExtractionRequest;
 import com.stdntedu.generated.model.WrongSource;
 import com.stdntedu.generated.model.ExamCreate;
@@ -34,6 +36,15 @@ import com.stdntedu.generated.model.DashboardResponse;
 import com.stdntedu.generated.model.GrowthEventCreateRequest;
 import com.stdntedu.generated.model.GrowthEventPageResponse;
 import com.stdntedu.generated.model.GrowthEventUpdateRequest;
+import com.stdntedu.generated.model.ExportCreateRequest;
+import com.stdntedu.generated.model.ExportFormat;
+import com.stdntedu.generated.model.ExportTaskPageResponse;
+import com.stdntedu.generated.model.ExportTaskStatus;
+import com.stdntedu.generated.model.ImportConfirmRequest;
+import com.stdntedu.generated.model.ImportStatus;
+import com.stdntedu.generated.model.ImportTaskPageResponse;
+import com.stdntedu.generated.model.ImportType;
+import com.stdntedu.generated.model.RetryImportRequest;
 import com.stdntedu.generated.model.InlineObject13;
 import com.stdntedu.generated.model.InlineObject14;
 import com.stdntedu.generated.model.InlineObject15;
@@ -65,6 +76,8 @@ import com.stdntedu.generated.model.InlineObject9;
 import com.stdntedu.generated.model.InlineObject10;
 import com.stdntedu.generated.model.InlineObject33;
 import com.stdntedu.generated.model.InlineObject34;
+import com.stdntedu.generated.model.InlineObject35;
+import com.stdntedu.generated.model.InlineObject36;
 import com.stdntedu.generated.model.InlineObject11;
 import com.stdntedu.generated.model.InlineObject12;
 import com.stdntedu.generated.model.ReviewCreate;
@@ -114,6 +127,8 @@ import com.stdntedu.generated.model.StudentUpdate;
 import com.stdntedu.generated.model.WrongCreate;
 import com.stdntedu.generated.model.WrongUpdate;
 import com.stdntedu.growth.event.service.GrowthEventService;
+import com.stdntedu.transfer.exporttask.ExportTaskService;
+import com.stdntedu.transfer.importtask.ImportTaskService;
 import com.stdntedu.student.service.AcademicTermService;
 import com.stdntedu.student.service.StudentService;
 import com.stdntedu.wrongquestion.service.WrongQuestionService;
@@ -151,6 +166,8 @@ public class GeneratedApiController implements DefaultApi {
     private final AiExtractionConfirmationService extractionConfirmations;
     private final AttachmentService attachments;
     private final GrowthEventService growthEvents;
+    private final ImportTaskService importTasks;
+    private final ExportTaskService exportTasks;
     private final RequestIdProvider requestIds;
 
     public GeneratedApiController(BaseDataService baseData, StudentService students, AcademicTermService terms,
@@ -162,7 +179,8 @@ public class GeneratedApiController implements DefaultApi {
             AiStudyPlanGenerationService aiStudyPlanGeneration, AiExtractionService aiExtractions,
             AiExtractionQuestionService extractionQuestions,
             AiExtractionConfirmationService extractionConfirmations, AttachmentService attachments,
-            GrowthEventService growthEvents, RequestIdProvider requestIds) {
+            GrowthEventService growthEvents, ImportTaskService importTasks, ExportTaskService exportTasks,
+            RequestIdProvider requestIds) {
         this.baseData = baseData;
         this.students = students;
         this.terms = terms;
@@ -184,6 +202,8 @@ public class GeneratedApiController implements DefaultApi {
         this.extractionConfirmations = extractionConfirmations;
         this.attachments = attachments;
         this.growthEvents = growthEvents;
+        this.importTasks = importTasks;
+        this.exportTasks = exportTasks;
         this.requestIds = requestIds;
     }
 
@@ -659,6 +679,92 @@ public class GeneratedApiController implements DefaultApi {
     @Override public ResponseEntity<InlineObject33> cancelAiWrongQuestionExtraction(String taskId,
             CancelAiExtractionRequest request) {
         return ResponseEntity.ok(taskResponse(aiExtractions.cancel(taskId, request), "OK", "success"));
+    }
+
+    @Override public ResponseEntity<ImportTaskPageResponse> listImportTasks(ImportType importType,
+            ImportStatus status, String studentId, OffsetDateTime startTime, OffsetDateTime endTime,
+            Integer page, Integer pageSize) {
+        return ResponseEntity.ok(new ImportTaskPageResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(importTasks.list(importType, status, studentId, startTime, endTime, page, pageSize)));
+    }
+
+    @Override public ResponseEntity<InlineObject35> createImportTask(MultipartFile file, ImportType importType,
+            String studentId, Boolean dryRun, String encoding, String sheetName, Boolean hasHeader) {
+        return importResponse(importTasks.create(file, importType, studentId,
+                dryRun == null ? true : dryRun, encoding == null ? "UTF-8" : encoding,
+                sheetName, hasHeader == null ? true : hasHeader), "ACCEPTED", "accepted", 202);
+    }
+
+    @Override public ResponseEntity<InlineObject35> getImportTask(String taskId) {
+        return importResponse(importTasks.get(taskId), "OK", "success", 200);
+    }
+
+    @Override public ResponseEntity<InlineObject35> confirmImportTask(String taskId, String idempotencyKey,
+            ImportConfirmRequest request) {
+        return importResponse(importTasks.confirm(taskId, idempotencyKey, request),
+                "ACCEPTED", "accepted", 202);
+    }
+
+    @Override public ResponseEntity<InlineObject35> cancelImportTask(String taskId, CancelImportRequest request) {
+        return importResponse(importTasks.cancel(taskId), "OK", "success", 200);
+    }
+
+    @Override public ResponseEntity<InlineObject35> retryImportTask(String taskId, RetryImportRequest request) {
+        return importResponse(importTasks.retry(taskId, request), "ACCEPTED", "accepted", 202);
+    }
+
+    @Override public ResponseEntity<Resource> downloadImportErrorReport(String taskId, String format) {
+        var download = importTasks.errorReport(taskId);
+        return fileResponse(download.content(), download.fileName(), download.mimeType(), download.size());
+    }
+
+    @Override public ResponseEntity<ExportTaskPageResponse> listExportTasks(String studentId,
+            ExportTaskStatus status, ExportFormat format, OffsetDateTime startTime, OffsetDateTime endTime,
+            Integer page, Integer pageSize) {
+        return ResponseEntity.ok(new ExportTaskPageResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(exportTasks.list(studentId, status, format, startTime, endTime, page, pageSize)));
+    }
+
+    @Override public ResponseEntity<InlineObject36> createExportTask(ExportCreateRequest request) {
+        return exportResponse(exportTasks.create(request), "ACCEPTED", "accepted", 202);
+    }
+
+    @Override public ResponseEntity<InlineObject36> getExportTask(String taskId) {
+        return exportResponse(exportTasks.get(taskId), "OK", "success", 200);
+    }
+
+    @Override public ResponseEntity<InlineObject36> cancelExportTask(String taskId, CancelExportRequest request) {
+        return exportResponse(exportTasks.cancel(taskId), "OK", "success", 200);
+    }
+
+    @Override public ResponseEntity<Resource> downloadExportFile(String taskId) {
+        var download = exportTasks.download(taskId);
+        return fileResponse(download.content(), download.fileName(), download.mimeType(), download.size());
+    }
+
+    private ResponseEntity<InlineObject35> importResponse(com.stdntedu.generated.model.ImportTaskDto task,
+            String code, String message, int status) {
+        InlineObject35 body = new InlineObject35().code(code).message(message).requestId(requestIds.current())
+                .timestamp(OffsetDateTime.now()).data(task);
+        return ResponseEntity.status(status).body(body);
+    }
+
+    private ResponseEntity<InlineObject36> exportResponse(com.stdntedu.generated.model.ExportTask task,
+            String code, String message, int status) {
+        InlineObject36 body = new InlineObject36().code(code).message(message).requestId(requestIds.current())
+                .timestamp(OffsetDateTime.now()).data(task);
+        return ResponseEntity.status(status).body(body);
+    }
+
+    private ResponseEntity<Resource> fileResponse(Resource content, String fileName, String mimeType, long size) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(mimeType))
+                .contentLength(size)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(fileName, StandardCharsets.UTF_8).build().toString())
+                .body(content);
     }
 
     private ResponseEntity<InlineObject1> planResponse(com.stdntedu.generated.model.StudyPlanDto plan) {

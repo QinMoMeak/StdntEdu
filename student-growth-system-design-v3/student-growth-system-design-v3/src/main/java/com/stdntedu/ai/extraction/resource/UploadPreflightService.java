@@ -15,6 +15,7 @@ import java.util.HexFormat;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -32,6 +33,8 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class UploadPreflightService {
     private static final int BUFFER_SIZE = 64 * 1024;
+    private static final Set<String> PUBLIC_ATTACHMENT_MIME_TYPES = Set.of(
+            "image/jpeg", "image/png", "image/webp", "application/pdf");
 
     static {
         ImageIO.scanForPlugins();
@@ -50,18 +53,12 @@ public class UploadPreflightService {
             boolean hasImage = false;
             boolean hasPdf = false;
             for (int index = 0; index < uploads.size(); index++) {
-                MultipartFile upload = uploads.get(index);
-                Path path = directory.resolve("upload-" + index + ".bin");
-                CopyResult copied = copy(upload, path);
-                DetectedMediaType type = detect(path);
-                verifyDeclaredMime(upload.getContentType(), type);
-                validateFileSize(type, copied.size());
-                rawBytes = AiExtractionLimits.addRawBytes(rawBytes, copied.size());
-                PreparedFile file = inspect(index, safeName(upload.getOriginalFilename(), index), path, type,
-                        copied.size(), copied.sha256());
+                PreparedFile file = prepareFile(uploads.get(index), directory.resolve("upload-" + index + ".bin"),
+                        index);
+                rawBytes = AiExtractionLimits.addRawBytes(rawBytes, file.size());
                 visualUnits = AiExtractionLimits.addVisualUnits(visualUnits, file.visualUnits());
-                hasPdf |= type.pdf();
-                hasImage |= !type.pdf();
+                hasPdf |= file.mediaType().pdf();
+                hasImage |= !file.mediaType().pdf();
                 files.add(file);
             }
             AiInputType inputType = hasPdf && hasImage ? AiInputType.MIXED : hasPdf ? AiInputType.PDF : AiInputType.IMAGE;
@@ -73,6 +70,36 @@ public class UploadPreflightService {
             PreparedExtraction.deleteRecursively(directory);
             throw AiExtractionLimits.invalid("uploaded file could not be read");
         }
+    }
+
+    public PreparedExtraction prepareAttachment(MultipartFile upload) {
+        String declared = upload == null ? null : upload.getContentType();
+        String normalized = declared == null ? "" : declared.toLowerCase(Locale.ROOT).split(";", 2)[0].trim();
+        if (!PUBLIC_ATTACHMENT_MIME_TYPES.contains(normalized)) {
+            throw AiExtractionLimits.unsupported("declared MIME is not supported");
+        }
+        Path directory = null;
+        try {
+            directory = Files.createTempDirectory("stdntedu-attachment-");
+            PreparedFile file = prepareFile(upload, directory.resolve("upload.bin"), 0);
+            return new PreparedExtraction(directory, List.of(file), file.visualUnits(),
+                    file.mediaType().pdf() ? AiInputType.PDF : AiInputType.IMAGE);
+        } catch (BusinessException ex) {
+            PreparedExtraction.deleteRecursively(directory);
+            throw ex;
+        } catch (IOException ex) {
+            PreparedExtraction.deleteRecursively(directory);
+            throw AiExtractionLimits.invalid("uploaded file could not be read");
+        }
+    }
+
+    private PreparedFile prepareFile(MultipartFile upload, Path path, int index) throws IOException {
+        CopyResult copied = copy(upload, path);
+        DetectedMediaType type = detect(path);
+        verifyDeclaredMime(upload.getContentType(), type);
+        validateFileSize(type, copied.size());
+        return inspect(index, safeName(upload.getOriginalFilename(), index), path, type,
+                copied.size(), copied.sha256());
     }
 
     private CopyResult copy(MultipartFile upload, Path target) throws IOException {
@@ -243,7 +270,10 @@ public class UploadPreflightService {
 
     private String safeName(String original, int index) {
         if (original == null || original.isBlank()) return "upload-" + index;
-        String name = Path.of(original).getFileName().toString();
+        String normalized = original.replace('\\', '/');
+        String name = normalized.substring(normalized.lastIndexOf('/') + 1)
+                .replaceAll("\\p{Cntrl}", "_").trim();
+        if (name.isEmpty()) return "upload-" + index;
         return name.length() > 255 ? name.substring(name.length() - 255) : name;
     }
 

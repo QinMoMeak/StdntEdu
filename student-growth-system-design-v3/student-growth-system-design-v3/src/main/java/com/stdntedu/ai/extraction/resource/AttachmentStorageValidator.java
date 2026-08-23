@@ -36,6 +36,6 @@ public class AttachmentStorageValidator {
     }
 
     private static IllegalStateException unavailable() {
-        return new IllegalStateException("AI extraction attachment storage is unavailable");
+        return new IllegalStateException("attachment storage is unavailable");
     }
 }

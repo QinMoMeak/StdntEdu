@@ -32,7 +32,7 @@ public class AttachmentStorageReconciliationService {
     public AttachmentReconciliationReport reconcile() {
         List<Long> missingIds = new ArrayList<>();
         Set<Path> referenced = new HashSet<>();
-        for (AttachmentEntity attachment : attachments.selectExtractionAttachments()) {
+        for (AttachmentEntity attachment : attachments.selectLocalAttachments()) {
             try {
                 Path path = Path.of(attachment.getStoragePath()).toAbsolutePath().normalize();
                 if (!storage.isManagedPath(path)) {
@@ -61,10 +61,10 @@ public class AttachmentStorageReconciliationService {
         AttachmentReconciliationReport report = new AttachmentReconciliationReport(
                 missingIds.size(), orphanCount, List.copyOf(missingIds));
         if (report.missingCount() > 0 || report.orphanCount() > 0) {
-            LOG.warn("AI extraction attachment reconciliation found missingCount={}, orphanCount={}, missingAttachmentIds={}",
+            LOG.warn("Attachment reconciliation found missingCount={}, orphanCount={}, missingAttachmentIds={}",
                     report.missingCount(), report.orphanCount(), report.missingAttachmentIds());
         } else {
-            LOG.info("AI extraction attachment reconciliation completed without inconsistencies");
+            LOG.info("Attachment reconciliation completed without inconsistencies");
         }
         return report;
     }

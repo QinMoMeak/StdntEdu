@@ -1,5 +1,5 @@
 openapi: 3.1.0
-info: {title: Student Growth Archive API, version: 3.9.0, license: {name: MIT, identifier: MIT}}
+info: {title: Student Growth Archive API, version: 3.10.0, license: {name: MIT, identifier: MIT}}
 servers: [{url: /api/v1}]
 security: [{bearerAuth: []}]
 paths:
@@ -155,25 +155,38 @@ paths:
     post:
       operationId: uploadAttachment
       summary: 上传附件
+      description: 通用附件上传。Local V1 仅支持 JPEG、PNG、WebP 和 PDF；图片最大 15 MiB，PDF 最大 50 MiB，空文件不受支持。上传只创建未关联的附件元数据，业务归属由后续 entity_attachment 关系建立。
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
               type: object
-              required: [file, category]
+              required: [file]
               properties:
-                file: {type: string, format: binary}
-                category: {$ref: '#/components/schemas/AttachmentCategory'}
-      responses: {'201': {$ref: '#/components/responses/AttachmentOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '413': {$ref: '#/components/responses/PayloadTooLarge'}, '415': {$ref: '#/components/responses/UnsupportedMediaType'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
+                file: {type: string, format: binary, description: 真实内容和声明 MIME 必须一致；允许 image/jpeg、image/png、image/webp、application/pdf。}
+            encoding:
+              file: {contentType: 'image/jpeg, image/png, image/webp, application/pdf'}
+      responses: {'201': {$ref: '#/components/responses/AttachmentOne'}, '400': {$ref: '#/components/responses/BadRequest'}, '401': {$ref: '#/components/responses/Unauthorized'}, '403': {$ref: '#/components/responses/Forbidden'}, '413': {$ref: '#/components/responses/PayloadTooLarge'}, '415': {$ref: '#/components/responses/UnsupportedMediaType'}, '422': {$ref: '#/components/responses/ValidationError'}, '500': {$ref: '#/components/responses/InternalServerError'}}
   /attachments/{attachmentId}/content:
     parameters: [{$ref: '#/components/parameters/AttachmentId'}]
     get:
       operationId: downloadAttachment
       summary: 下载附件
+      description: 按附件 ID 流式下载；不支持 Range/206，不暴露内部 storage path。Content-Disposition 固定为 attachment，并使用安全编码的原始文件名。
       responses:
-        '200': {description: 文件, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+        '200':
+          description: 附件内容
+          headers:
+            Content-Disposition: {description: attachment disposition 与安全编码文件名, schema: {type: string}}
+            Content-Length: {description: 文件字节数, schema: {type: integer, format: int64, minimum: 0}}
+          content:
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/png: {schema: {type: string, format: binary}}
+            image/webp: {schema: {type: string, format: binary}}
+            application/pdf: {schema: {type: string, format: binary}}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
         '500': {$ref: '#/components/responses/InternalServerError'}
   /ai/models:
@@ -626,7 +639,7 @@ components:
     DashboardResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/DashboardDto'}}}]}
     ResourceHistoryPageResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/ResourceHistoryDto'}}}}]}}}]}
     StudyLogPageResponse: {allOf: [{$ref: '#/components/schemas/Envelope'}, {type: object, properties: {data: {allOf: [{$ref: '#/components/schemas/Page'}, {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/StudyLogDto'}}}}]}}}]}
-    Attachment: {type: object, properties: {id: {$ref: '#/components/schemas/Id'}, fileName: {type: string}, mimeType: {type: [string,'null']}, fileSize: {type: integer, format: int64}, sha256: {type: string}, url: {type: string}}}
+    Attachment: {type: object, required: [id,fileName,mimeType,fileSize,sha256,url,createdAt], properties: {id: {$ref: '#/components/schemas/Id'}, fileName: {type: string, description: 已移除路径和控制字符的原始客户端文件名。}, mimeType: {type: [string,'null'], description: 经 magic 和解析器确认的规范 MIME。}, fileSize: {type: integer, format: int64, minimum: 1}, sha256: {type: string, pattern: '^[0-9a-f]{64}$'}, url: {type: string, description: 基于附件 ID 的公开下载路径，不包含内部 storage path。}, createdAt: {type: string, format: date-time}}}
     AiModelCreateRequest: {type: object, required: [name,provider,modelName,modelType,protocol,authType,baseUrl], properties: {name: {type: string}, provider: {$ref: '#/components/schemas/AiProvider'}, modelName: {type: string, minLength: 1}, modelType: {$ref: '#/components/schemas/AiModelType'}, protocol: {$ref: '#/components/schemas/AiProtocol'}, authType: {$ref: '#/components/schemas/AiAuthType'}, baseUrl: {type: string, format: uri}, apiKey: {type: [string,'null'], minLength: 1, writeOnly: true, description: 空字符串非法；是否必须提供由 authType 决定。}, supportsVision: {type: boolean, default: false}, supportsJson: {type: boolean, default: true}, local: {type: boolean, default: false}, enabled: {type: boolean, default: true}, priority: {type: integer, default: 100}, timeoutSeconds: {type: integer, minimum: 1, default: 120}, temperature: {type: [number,'null'], minimum: 0, maximum: 2}, maxTokens: {type: [integer,'null'], minimum: 1}, remark: {type: [string,'null']}}}
     AiModelUpdateRequest: {allOf: [{$ref: '#/components/schemas/AiModelCreateRequest'}, {type: object, required: [version], properties: {apiKey: {type: [string,'null'], minLength: 1, writeOnly: true, description: 省略且 clearApiKey=false 时保持原 Secret；非空时新建或替换 Secret。}, clearApiKey: {type: boolean, default: false, description: true 时清除引用并删除对应 Secret；不得与 apiKey 同时提交。}, version: {type: integer, minimum: 0}}}]}
     AiModelStatusChangeRequest: {type: object, required: [version], properties: {version: {type: integer, minimum: 0}}}
@@ -724,7 +737,6 @@ components:
     BackupStatus: {type: string, enum: [PENDING,RUNNING,SUCCESS,FAILED,DELETED,EXPIRED]}
     RestoreStatus: {type: string, enum: [PENDING,CREATING_SNAPSHOT,VALIDATING,RESTORING_DATABASE,RESTORING_FILES,MIGRATING,VERIFYING,SUCCESS,FAILED,ROLLED_BACK]}
     RestoreConflictStrategy: {type: string, enum: [REPLACE,MERGE,SKIP_EXISTING]}
-    AttachmentCategory: {type: string, enum: [AVATAR,EXAM,WRONG_QUESTION,RESOURCE,GROWTH_EVENT,REPORT,IMPORT,EXPORT,BACKUP,OTHER]}
   responses:
     ImportPage: {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ImportTaskPageResponse'}}}}
     ImportErrorExport: {description: 错误报告文件, content: {text/csv: {schema: {type: string, format: binary}}, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: {schema: {type: string, format: binary}}}}

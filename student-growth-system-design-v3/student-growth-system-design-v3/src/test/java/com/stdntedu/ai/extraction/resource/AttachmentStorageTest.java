@@ -47,13 +47,13 @@ class AttachmentStorageTest {
         Files.writeString(root, "not a directory");
         assertThatThrownBy(() -> AttachmentStorageValidator.validate(root, Files::isWritable))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("AI extraction attachment storage is unavailable");
+                .hasMessage("attachment storage is unavailable");
 
         Files.delete(root);
         Files.createDirectories(root);
         assertThatThrownBy(() -> AttachmentStorageValidator.validate(root, ignored -> false))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("AI extraction attachment storage is unavailable");
+                .hasMessage("attachment storage is unavailable");
     }
 
     @Test

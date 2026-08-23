@@ -1,4 +1,34 @@
-# OpenAPI V3.9.0 冻结说明
+# OpenAPI V3.10.0 冻结说明
+
+## V3.10.0 Attachment 公开附件契约闭环
+
+V3.10.0 是 Stage12B Attachment 后端实现的新契约基线。既有 `attachment` 表保存文件元数据和
+内部 storage reference，`entity_attachment` 保存业务实体关系，`ai_extraction_file` 保存
+Extraction 输入关系；三者职责独立。数据库基线仍为 Flyway V20，Mastery Algorithm 仍为 V1.0，
+现有模型足以实现公开上传和下载，因此不新增 V21。
+
+1. `uploadAttachment` 是通用附件上传，不是 AI Extraction 上传的前置步骤。上传仅创建未关联
+   Attachment；后续业务通过 `entity_attachment(entity_type,entity_id,attachment_role,sort_order)`
+   建立关系。未关联记录在当前版本保留，等待业务关联或后续显式 GC；reconciliation 只检测不删除。
+2. 原契约必填 `category` 无数据库列，也不属于文件本体元数据，因此 V3.10.0 将其从上传请求移除，
+   不新增虚构列或枚举。Local V1 只接受 JPEG、PNG、WebP 和 PDF，声明 MIME 必须与 magic/parser
+   结果一致；图片最大 15 MiB、PDF 最大 50 MiB，空文件返回 422，类型不支持或伪造返回 415，
+   超限返回 413。Servlet 单文件 envelope 必须高于 50 MiB。
+3. `Attachment` 响应公开 `id`、安全化原始 `fileName`、规范 `mimeType`、`fileSize`、真实 SHA-256、
+   基于 ID 的下载 `url` 和 `createdAt`。不得返回 absolute path、storage root、临时路径或内部
+   `storage_path`。所有 BIGINT ID 继续通过 API 返回 string。
+4. 下载按 ID 查询未删除 metadata，再由统一 Storage 校验 root、真实路径、普通文件和 symlink
+   逃逸，使用流式响应。`Content-Disposition` 固定为 `attachment`，文件名通过框架 RFC 5987
+   builder 安全编码；同时返回已验证 MIME 和 Content-Length。当前不承诺 Range/206。
+5. 公开附件与 AI Extraction 原始附件共用 Stage11B 的 persistent root、UUID physical filename、
+   normalized/real path guard、失败补偿和 reconciliation。AI Extraction 原有 multipart、visual order、
+   限制、恢复、重试、取消与确认流程保持不变。
+6. GrowthEvent 已有 `attachmentIds`/`attachments` 契约和 `entity_attachment` 基础，Stage12C 应冻结
+   `entity_type`、`attachment_role` 与唯一性规则后使用该关系表。Resource 的 `coverAttachmentId`
+   与 WrongQuestion 的附件语义仍未冻结，本阶段不越界扩展。
+
+本次移除尚未实现且无法持久化的必填 category，并补齐公开 MIME、大小、响应字段和下载 header
+语义，属于 Stage12B 启用前的 minor 契约闭环，不作为兼容性 patch。路径和 operationId 均不变。
 
 ## V3.9.0 Knowledge 知识体系契约闭环
 
@@ -416,7 +446,7 @@ V3.1.1 是阶段四考试与成绩模块的新契约基线，在 V3.1 的基础�
 
 ## 冻结结论
 
-OpenAPI V3.9.0 是 Stage12A Knowledge 实现后的新契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构、持久化映射、加密规则、视觉输入转换或计算公式。
+OpenAPI V3.10.0 是 Stage12B Attachment 实现后的新契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构、持久化映射、加密规则、视觉输入转换或计算公式。
 
 本冻结包括统一响应模型、分页模型、错误模型、安全定义、文件上传下载约束、异步任务模型以及核心枚举。所有数据库 BIGINT ID 通过 API 返回 `string`。核心枚举编码与数据库 V1 至 V13 的 CHECK 约束保持一致。
 
@@ -434,12 +464,14 @@ OpenAPI V3.9.0 是 Stage12A Knowledge 实现后的新契约基线。后续开发
 
 ## 数据库边界
 
-数据库 V1 至 V20 已冻结，不得回写或重定义既有迁移的业务语义。Stage12A 不新增 V21；后续数据库变更必须使用新的迁移版本。
+数据库 V1 至 V20 已冻结，不得回写或重定义既有迁移的业务语义。Stage12B 不新增 V21；后续数据库变更必须使用新的迁移版本。
 
 ## 安全边界
 
-契约已固定 `bearerAuth` 和 JWT Bearer 方案，但当前阶段不代表真实 JWT 鉴权已经实现。鉴权代码、Controller、Service、Entity、前端和真实 AI/文件/恢复执行均不属于本冻结说明的实现内容。
+契约已固定 `bearerAuth` 和 JWT Bearer 方案，但当前阶段不代表真实 JWT 鉴权已经实现。真实 JWT、前端、导入导出和备份恢复仍不属于本阶段实现内容。
 
 ## 验证记录
 
-本轮 `swagger-cli`、Redocly 和 OpenAPI Generator validate 均通过；Java 模型与 TypeScript Fetch 试生成通过。详细统计和一致性结论见 `api/openapi-validation-report.md`。
+本轮 `swagger-cli`、Redocly 和 OpenAPI Generator validate 均通过；Java 模型、TypeScript Fetch 与
+Spring 接口生成通过。`mvnw.cmd clean test` 和 `clean package` 均以 367/0/0/0 通过，Flyway
+V1-V20、47 张业务表和 31 项 system_config 保持不变。详细统计见 `api/openapi-validation-report.md`。

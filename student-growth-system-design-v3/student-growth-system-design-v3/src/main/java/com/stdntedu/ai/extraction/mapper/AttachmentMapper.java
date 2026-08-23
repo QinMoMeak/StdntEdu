@@ -10,11 +10,10 @@ import java.util.List;
 @Mapper
 public interface AttachmentMapper extends BaseMapper<AttachmentEntity> {
     @Select("""
-            SELECT DISTINCT a.*
-              FROM attachment a
-              JOIN ai_extraction_file f ON f.attachment_id = a.id
-             WHERE a.deleted = 0 AND a.storage_type = 'LOCAL'
-             ORDER BY a.id
+            SELECT *
+              FROM attachment
+             WHERE deleted = 0 AND storage_type = 'LOCAL'
+             ORDER BY id
             """)
-    List<AttachmentEntity> selectExtractionAttachments();
+    List<AttachmentEntity> selectLocalAttachments();
 }

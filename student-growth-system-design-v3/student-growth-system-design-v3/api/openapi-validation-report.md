@@ -1,4 +1,34 @@
-# OpenAPI V3.9.0 验证报告
+# OpenAPI V3.10.0 验证报告
+
+## V3.10.0 Attachment 契约与生成验证
+
+V3.10.0 保持既有路径和 operationId，只闭环公开 Attachment 的上传、下载、元数据与 Storage
+安全边界。数据库 `attachment` 与 `entity_attachment` 已足够表达文件本体和后续业务关系，
+因此 Flyway 保持 V20，不新增 V21。
+
+- `uploadAttachment` 移除无法持久化且职责错误的必填 `category`，只接收一个 multipart 文件。
+- Local V1 支持 JPEG、PNG、WebP、PDF；图片最大 15 MiB、PDF 最大 50 MiB，声明 MIME 与
+  magic/parser 必须一致，空文件不受支持。
+- `Attachment` 响应补齐 required 语义和 `createdAt`，不暴露 `storage_path`；`url` 仅使用公开 ID。
+- `downloadAttachment` 返回实际 MIME、Content-Length 和安全编码的 attachment disposition，
+  使用流式 Resource，不承诺 Range/206。
+- 公开附件复用 Stage11B 同一 persistent root、UUID 文件名、路径防护、补偿和 reconciliation；
+  AI Extraction multipart 与生命周期保持独立。
+
+- OpenAPI 文件 810 行；paths 86、operations 116、schemas 157；operationId 116/116/0。
+- Swagger CLI validate 通过；Redocly CLI 1.34.5 recommended lint 通过，errors 0、warnings 0。
+- OpenAPI Generator CLI 7.10.0 JAR validate 通过，仅保留 `Error`、`ResourceCreateRequest`、
+  `ResourceUpdateRequest`、`AiExtractionConfirmResultDto` 4 个既有未使用模型建议。
+- Java client model、TypeScript Fetch 和 Maven Spring generation 均成功。Java `Attachment.id` 为
+  `String`、`fileSize` 为 `Long`、`createdAt` 为 `OffsetDateTime`；TypeScript 分别为 `string`、
+  `number`、`Date`。生成的上传方法只含 `MultipartFile file`，下载方法显式含 `String attachmentId`。
+- Spring 生成接口 116 个，含 77 个 path variable，显式 `@PathVariable` 缺口 0；实现 operationId
+  从 81 增至 83，公开 generated 501 从 35 降至 33。
+- `StageTwelveBAttachmentIntegrationTest` 新增 11 个 JUnit testcase，连同既有 Storage、Extraction、
+  Flyway 与模块回归覆盖 49 个 Stage12B 验收场景。
+- `mvnw.cmd clean test` 与 `mvnw.cmd clean package` 均通过：tests 367、failures 0、errors 0、
+  skipped 0。Testcontainers MySQL 8 从空库执行 V1-V20 成功，最终版本 v20；业务表 47，
+  `system_config` 31；可执行 Spring Boot JAR 打包成功。
 
 ## V3.9.0 Knowledge 契约与生成验证
 

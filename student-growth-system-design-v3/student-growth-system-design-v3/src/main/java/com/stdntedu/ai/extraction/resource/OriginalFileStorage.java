@@ -2,6 +2,7 @@ package com.stdntedu.ai.extraction.resource;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -47,7 +48,7 @@ public class OriginalFileStorage {
             try {
                 Files.deleteIfExists(file.storagePath());
             } catch (IOException ex) {
-                LOG.warn("Extraction attachment compensation cleanup failed");
+                LOG.warn("Attachment compensation cleanup failed");
             }
         }
     }
@@ -56,8 +57,9 @@ public class OriginalFileStorage {
         try {
             Path normalized = candidate.toAbsolutePath().normalize();
             if (!normalized.startsWith(root)) throw missing();
+            if (Files.isSymbolicLink(normalized)) throw missing();
             Path real = normalized.toRealPath();
-            if (!real.startsWith(root) || !Files.isRegularFile(real)) throw missing();
+            if (!real.startsWith(root) || !Files.isRegularFile(real, LinkOption.NOFOLLOW_LINKS)) throw missing();
             return real;
         } catch (IOException | RuntimeException ex) {
             if (ex instanceof BusinessException business) throw business;
@@ -72,7 +74,7 @@ public class OriginalFileStorage {
     }
 
     private BusinessException missing() {
-        return new BusinessException("STORAGE_FILE_MISSING", "stored extraction attachment is unavailable",
+        return new BusinessException("STORAGE_FILE_MISSING", "stored attachment is unavailable",
                 HttpStatus.INTERNAL_SERVER_ERROR);
     }
 

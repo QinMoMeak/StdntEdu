@@ -1,7 +1,9 @@
 package com.stdntedu.common.web;
 
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 
+import com.stdntedu.attachment.service.AttachmentService;
 import com.stdntedu.base.service.BaseDataService;
 import com.stdntedu.ai.model.service.AiModelService;
 import com.stdntedu.ai.analysis.service.AiAnalysisService;
@@ -50,6 +52,7 @@ import com.stdntedu.generated.model.InlineObject28;
 import com.stdntedu.generated.model.InlineObject29;
 import com.stdntedu.generated.model.InlineObject30;
 import com.stdntedu.generated.model.InlineObject31;
+import com.stdntedu.generated.model.InlineObject32;
 import com.stdntedu.generated.model.InlineObject5;
 import com.stdntedu.generated.model.InlineObject6;
 import com.stdntedu.generated.model.InlineObject7;
@@ -109,6 +112,10 @@ import com.stdntedu.generated.model.WrongUpdate;
 import com.stdntedu.student.service.AcademicTermService;
 import com.stdntedu.student.service.StudentService;
 import com.stdntedu.wrongquestion.service.WrongQuestionService;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -137,6 +144,7 @@ public class GeneratedApiController implements DefaultApi {
     private final AiExtractionService aiExtractions;
     private final AiExtractionQuestionService extractionQuestions;
     private final AiExtractionConfirmationService extractionConfirmations;
+    private final AttachmentService attachments;
     private final RequestIdProvider requestIds;
 
     public GeneratedApiController(BaseDataService baseData, StudentService students, AcademicTermService terms,
@@ -147,7 +155,8 @@ public class GeneratedApiController implements DefaultApi {
             AiModelService aiModels, AiAnalysisService aiAnalyses,
             AiStudyPlanGenerationService aiStudyPlanGeneration, AiExtractionService aiExtractions,
             AiExtractionQuestionService extractionQuestions,
-            AiExtractionConfirmationService extractionConfirmations, RequestIdProvider requestIds) {
+            AiExtractionConfirmationService extractionConfirmations, AttachmentService attachments,
+            RequestIdProvider requestIds) {
         this.baseData = baseData;
         this.students = students;
         this.terms = terms;
@@ -167,6 +176,7 @@ public class GeneratedApiController implements DefaultApi {
         this.aiExtractions = aiExtractions;
         this.extractionQuestions = extractionQuestions;
         this.extractionConfirmations = extractionConfirmations;
+        this.attachments = attachments;
         this.requestIds = requestIds;
     }
 
@@ -318,6 +328,22 @@ public class GeneratedApiController implements DefaultApi {
     @Override public ResponseEntity<InlineObject20> disableKnowledgeNode(String knowledgeId,
             KnowledgeNodeDisableRequest request) {
         return knowledgeNodeResponse(knowledgeNodes.disable(knowledgeId, request));
+    }
+
+    @Override public ResponseEntity<InlineObject32> uploadAttachment(MultipartFile file) {
+        return ResponseEntity.status(201).body(new InlineObject32().code("CREATED").message("created")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(attachments.upload(file)));
+    }
+
+    @Override public ResponseEntity<Resource> downloadAttachment(String attachmentId) {
+        AttachmentService.Download download = attachments.download(attachmentId);
+        String disposition = ContentDisposition.attachment()
+                .filename(download.fileName(), StandardCharsets.UTF_8).build().toString();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(download.mimeType()))
+                .contentLength(download.size())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
+                .body(download.content());
     }
 
     @Override public ResponseEntity<InlineObject30> listResources(Integer page, Integer pageSize) {

@@ -5,7 +5,7 @@ spring:
     active: local
   servlet:
     multipart:
-      max-file-size: 50MB
+      max-file-size: 51MB
       max-request-size: 270MB
       file-size-threshold: 0B
   datasource:

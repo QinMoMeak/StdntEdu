@@ -31,6 +31,9 @@ import com.stdntedu.generated.model.ExamCreate;
 import com.stdntedu.generated.model.ExamType;
 import com.stdntedu.generated.model.ExamUpdate;
 import com.stdntedu.generated.model.DashboardResponse;
+import com.stdntedu.generated.model.GrowthEventCreateRequest;
+import com.stdntedu.generated.model.GrowthEventPageResponse;
+import com.stdntedu.generated.model.GrowthEventUpdateRequest;
 import com.stdntedu.generated.model.InlineObject13;
 import com.stdntedu.generated.model.InlineObject14;
 import com.stdntedu.generated.model.InlineObject15;
@@ -41,6 +44,7 @@ import com.stdntedu.generated.model.InlineObject19;
 import com.stdntedu.generated.model.InlineObject20;
 import com.stdntedu.generated.model.InlineObject1;
 import com.stdntedu.generated.model.InlineObject2;
+import com.stdntedu.generated.model.InlineObject3;
 import com.stdntedu.generated.model.InlineObject21;
 import com.stdntedu.generated.model.InlineObject22;
 import com.stdntedu.generated.model.InlineObject23;
@@ -109,6 +113,7 @@ import com.stdntedu.generated.model.StudentCreate;
 import com.stdntedu.generated.model.StudentUpdate;
 import com.stdntedu.generated.model.WrongCreate;
 import com.stdntedu.generated.model.WrongUpdate;
+import com.stdntedu.growth.event.service.GrowthEventService;
 import com.stdntedu.student.service.AcademicTermService;
 import com.stdntedu.student.service.StudentService;
 import com.stdntedu.wrongquestion.service.WrongQuestionService;
@@ -145,6 +150,7 @@ public class GeneratedApiController implements DefaultApi {
     private final AiExtractionQuestionService extractionQuestions;
     private final AiExtractionConfirmationService extractionConfirmations;
     private final AttachmentService attachments;
+    private final GrowthEventService growthEvents;
     private final RequestIdProvider requestIds;
 
     public GeneratedApiController(BaseDataService baseData, StudentService students, AcademicTermService terms,
@@ -156,7 +162,7 @@ public class GeneratedApiController implements DefaultApi {
             AiStudyPlanGenerationService aiStudyPlanGeneration, AiExtractionService aiExtractions,
             AiExtractionQuestionService extractionQuestions,
             AiExtractionConfirmationService extractionConfirmations, AttachmentService attachments,
-            RequestIdProvider requestIds) {
+            GrowthEventService growthEvents, RequestIdProvider requestIds) {
         this.baseData = baseData;
         this.students = students;
         this.terms = terms;
@@ -177,6 +183,7 @@ public class GeneratedApiController implements DefaultApi {
         this.extractionQuestions = extractionQuestions;
         this.extractionConfirmations = extractionConfirmations;
         this.attachments = attachments;
+        this.growthEvents = growthEvents;
         this.requestIds = requestIds;
     }
 
@@ -438,6 +445,36 @@ public class GeneratedApiController implements DefaultApi {
 
     @Override public ResponseEntity<Void> deleteStudyLog(String studyLogId) {
         studyLogs.delete(studyLogId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override public ResponseEntity<GrowthEventPageResponse> listGrowthEvents(String studentId, String eventType,
+            java.time.LocalDate startDate, java.time.LocalDate endDate, String keyword, Integer page,
+            Integer pageSize) {
+        return ResponseEntity.ok(new GrowthEventPageResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(growthEvents.list(studentId, eventType, startDate, endDate, keyword, page, pageSize)));
+    }
+
+    @Override public ResponseEntity<InlineObject3> createGrowthEvent(GrowthEventCreateRequest request) {
+        return ResponseEntity.status(201).body(new InlineObject3().code("CREATED").message("created")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(growthEvents.create(request)));
+    }
+
+    @Override public ResponseEntity<InlineObject3> getGrowthEvent(String eventId) {
+        return ResponseEntity.ok(new InlineObject3().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(growthEvents.get(eventId)));
+    }
+
+    @Override public ResponseEntity<InlineObject3> updateGrowthEvent(String eventId,
+            GrowthEventUpdateRequest request) {
+        return ResponseEntity.ok(new InlineObject3().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(growthEvents.update(eventId, request)));
+    }
+
+    @Override public ResponseEntity<Void> deleteGrowthEvent(Integer version, String eventId) {
+        growthEvents.delete(eventId, version);
         return ResponseEntity.noContent().build();
     }
 

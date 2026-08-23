@@ -271,7 +271,7 @@ class StageTwelveBAttachmentIntegrationTest {
     }
 
     @Test
-    void scenarios33_40_publicAttachmentIsReconciledAndGrowthEventRemainsUnimplemented() throws Exception {
+    void scenarios33_40_publicAttachmentIsReconciledAndGrowthEventUsesBusinessValidation() throws Exception {
         attachments.upload(file("reconciled.png", "image/png", png()));
         AttachmentReconciliationReport report = reconciliation.reconcile();
         assertThat(report.missingCount()).isZero();
@@ -283,7 +283,7 @@ class StageTwelveBAttachmentIntegrationTest {
                                 {"studentId":"1","eventType":"ACHIEVEMENT","title":"not implemented",
                                  "eventDate":"2026-08-23","attachmentIds":[]}
                                 """))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isNotFound());
     }
 
     private void assertError(MockMultipartFile file, HttpStatus status, String code) {

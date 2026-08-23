@@ -5,8 +5,11 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import com.stdntedu.ai.extraction.entity.AttachmentEntity;
 import com.stdntedu.ai.extraction.mapper.AttachmentMapper;
@@ -74,18 +77,25 @@ public class AttachmentService {
 
     public Download download(String attachmentId) {
         AttachmentEntity entity = require(ids.toLong(attachmentId));
-        if (!"LOCAL".equals(entity.getStorageType()) || !PUBLIC_MIME_TYPES.contains(entity.getMimeType())) {
-            throw unavailable();
-        }
-        Path path = storage.requireStoredFile(Path.of(entity.getStoragePath()));
+        Path path = requireAvailableFile(entity);
         try {
-            if (Files.size(path) != entity.getFileSize()) throw unavailable();
             Resource content = new InputStreamResource(Files.newInputStream(path,
                     StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS));
             return new Download(content, entity.getFileName(), entity.getMimeType(), entity.getFileSize());
         } catch (IOException | RuntimeException ex) {
             if (ex instanceof BusinessException business) throw business;
             throw unavailable();
+        }
+    }
+
+    public void validateForAssociation(List<Long> attachmentIds) {
+        if (attachmentIds.isEmpty()) return;
+        Map<Long, AttachmentEntity> found = attachments.selectBatchIds(attachmentIds).stream()
+                .collect(Collectors.toMap(AttachmentEntity::getId, Function.identity()));
+        for (Long id : attachmentIds) {
+            AttachmentEntity entity = found.get(id);
+            if (entity == null) throw new ResourceNotFoundException("attachment not found");
+            requireAvailableFile(entity);
         }
     }
 
@@ -100,6 +110,19 @@ public class AttachmentService {
         return new Attachment(id, entity.getFileName(), entity.getMimeType(), entity.getFileSize(),
                 entity.getSha256(), "/api/v1/attachments/" + id + "/content",
                 time.toOffsetDateTime(entity.getCreateTime()));
+    }
+
+    private Path requireAvailableFile(AttachmentEntity entity) {
+        if (!"LOCAL".equals(entity.getStorageType()) || !PUBLIC_MIME_TYPES.contains(entity.getMimeType())) {
+            throw unavailable();
+        }
+        Path path = storage.requireStoredFile(Path.of(entity.getStoragePath()));
+        try {
+            if (Files.size(path) != entity.getFileSize()) throw unavailable();
+            return path;
+        } catch (IOException ex) {
+            throw unavailable();
+        }
     }
 
     private BusinessException unavailable() {

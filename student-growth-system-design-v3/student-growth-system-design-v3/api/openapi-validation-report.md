@@ -1,4 +1,28 @@
-# OpenAPI V3.10.0 验证报告
+# OpenAPI V3.11.0 验证报告
+
+## V3.11.0 Growth Event 契约与生成验证
+
+V3.11.0 保持既有 86 个路径模板、116 个 operationId 和 157 个 Schema，只补齐 Growth Event
+删除并发参数及字段、关系、分页语义。Flyway 保持 V20，不新增 V21。
+
+- `deleteGrowthEvent` 新增必填非负 `version` query 参数；Java Spring 生成签名显式包含
+  `Integer version` 和 `String eventId`。
+- `eventType` 继续使用动态 `growth_event_type` 字典 code；附件关系冻结为
+  `GROWTH_EVENT/ATTACHMENT`，按请求顺序保存，更新为全量 replacement。
+- Growth Event BIGINT ID 的 Java 生成类型为 `String`，TypeScript 为 `string`；`eventDate` 分别为
+  `LocalDate` 和 `Date`，审计时间分别为 `OffsetDateTime` 和 `Date`。
+- OpenAPI 文件 762 行；paths 86、operations 116、schemas 157；operationId 116/116/0。
+- Swagger CLI validate 通过；Redocly CLI 1.34.5 recommended lint 通过，errors 0、warnings 0。
+- OpenAPI Generator CLI 7.10.0 JAR validate、Java client、TypeScript Fetch 和 Maven Spring
+  generation 均通过；validate 仅保留 4 个既有未使用模型建议。
+- Spring 生成接口仍含 77 个 path variable，显式 `@PathVariable` 缺口 0；实现 operationId 从 83
+  增至 88，公开 generated 501 从 33 降至 28。
+- `StageTwelveCGrowthEventIntegrationTest` 新增 14 个 JUnit testcase，覆盖 52 个专项业务/接口场景；
+  连同契约、生成、既有阶段回归、Flyway 与 Git 检查，共映射 64 个 Stage12C 验收场景。
+
+- `mvnw.cmd clean test` 与 `mvnw.cmd clean package` 均通过：tests 381、failures 0、errors 0、
+  skipped 0。Testcontainers MySQL 8 从空库执行 V1-V20 成功，最终版本 v20；业务表 47，
+  `system_config` 31；可执行 Spring Boot JAR 打包成功。
 
 ## V3.10.0 Attachment 契约与生成验证
 

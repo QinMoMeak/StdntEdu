@@ -1,4 +1,28 @@
-# OpenAPI V3.10.0 冻结说明
+# OpenAPI V3.11.0 冻结说明
+
+## V3.11.0 Growth Event 成长事件契约闭环
+
+V3.11.0 是 Stage12C Growth Event 后端实现的新契约基线。数据库基线仍为 Flyway V20，
+Mastery Algorithm 仍为 V1.0；现有 `growth_event`、字典和 `entity_attachment` 已能完整表达业务，
+因此不新增 V21。
+
+1. `eventType` 保存 `growth_event_type` 字典的 `item_code`，不是数据库 ID，也不新增静态枚举。
+   创建和更新只接受当前启用项；历史事件即使对应字典项后来禁用，仍可查询并返回标签。
+2. Growth Event 附件关系固定使用 `entity_type=GROWTH_EVENT`、`attachment_role=ATTACHMENT`。
+   同一事件的 `attachmentIds` 不得重复，顺序写入 `sort_order=0..N-1`；同一附件可被不同业务实体共享。
+3. 创建先批量验证全部附件 metadata 和物理文件，再在一个事务内写入事件及关系；任一失败均不留下
+   event 或 relation。更新采用完整替换附件集合语义，事件字段、CAS version 和关系替换同事务提交。
+4. 删除请求新增必填 `version`，使用条件更新完成逻辑删除；旧 version 返回
+   `409 DATA_VERSION_CONFLICT`。删除同时解除 `entity_attachment` 关系，但保留 Attachment metadata
+   和物理文件；已删除事件不再出现在 get/list 中。
+5. 列表支持 student、eventType、起止日期和 keyword 过滤，日期边界均包含；固定按
+   `event_date DESC, create_time DESC, id DESC` 排序。分页主体和附件均批量查询，不逐行查询附件。
+6. `eventDate` 使用 `date`，允许未来日期；description 按普通文本原样保存，不解释 HTML/Markdown。
+   所有 BIGINT ID 继续通过 API 返回 string，时间按项目统一时区输出。
+7. Growth Event 写入不更新 Mastery、StudyPlan、Extraction、Dashboard 或 GrowthReport。本阶段不新增
+   自动报告、统计副作用或附件生命周期 GC。
+
+本次只为删除补齐并发参数并明确既有字段/关系语义；不新增路径或 operationId，不修改数据库。
 
 ## V3.10.0 Attachment 公开附件契约闭环
 

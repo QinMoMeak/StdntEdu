@@ -35,6 +35,8 @@ import com.stdntedu.generated.model.InlineObject15;
 import com.stdntedu.generated.model.InlineObject16;
 import com.stdntedu.generated.model.InlineObject17;
 import com.stdntedu.generated.model.InlineObject18;
+import com.stdntedu.generated.model.InlineObject19;
+import com.stdntedu.generated.model.InlineObject20;
 import com.stdntedu.generated.model.InlineObject1;
 import com.stdntedu.generated.model.InlineObject2;
 import com.stdntedu.generated.model.InlineObject21;
@@ -60,6 +62,10 @@ import com.stdntedu.generated.model.InlineObject11;
 import com.stdntedu.generated.model.InlineObject12;
 import com.stdntedu.generated.model.ReviewCreate;
 import com.stdntedu.generated.model.MasteryAdjustRequest;
+import com.stdntedu.generated.model.KnowledgeNodeCreateRequest;
+import com.stdntedu.generated.model.KnowledgeNodeDisableRequest;
+import com.stdntedu.generated.model.KnowledgeNodeMoveRequest;
+import com.stdntedu.generated.model.KnowledgeNodeUpdateRequest;
 import com.stdntedu.generated.model.ResourceCreate;
 import com.stdntedu.generated.model.ResourceHistoryCreateRequest;
 import com.stdntedu.generated.model.ResourceHistoryPageResponse;
@@ -95,6 +101,7 @@ import com.stdntedu.resource.service.StudentResourceService;
 import com.stdntedu.studyplan.service.StudyPlanService;
 import com.stdntedu.score.service.ExamService;
 import com.stdntedu.knowledge.mastery.service.MasteryService;
+import com.stdntedu.knowledge.node.service.KnowledgeNodeService;
 import com.stdntedu.generated.model.StudentCreate;
 import com.stdntedu.generated.model.StudentUpdate;
 import com.stdntedu.generated.model.WrongCreate;
@@ -117,6 +124,7 @@ public class GeneratedApiController implements DefaultApi {
     private final ExamService exams;
     private final WrongQuestionService wrongQuestions;
     private final MasteryService mastery;
+    private final KnowledgeNodeService knowledgeNodes;
     private final LearningResourceService resources;
     private final ResourceHistoryService resourceHistory;
     private final StudyLogService studyLogs;
@@ -133,6 +141,7 @@ public class GeneratedApiController implements DefaultApi {
 
     public GeneratedApiController(BaseDataService baseData, StudentService students, AcademicTermService terms,
             ExamService exams, WrongQuestionService wrongQuestions, MasteryService mastery,
+            KnowledgeNodeService knowledgeNodes,
             LearningResourceService resources, ResourceHistoryService resourceHistory, StudyLogService studyLogs,
             StudentResourceService studentResources, StudyPlanService studyPlans, DashboardService dashboard,
             AiModelService aiModels, AiAnalysisService aiAnalyses,
@@ -145,6 +154,7 @@ public class GeneratedApiController implements DefaultApi {
         this.exams = exams;
         this.wrongQuestions = wrongQuestions;
         this.mastery = mastery;
+        this.knowledgeNodes = knowledgeNodes;
         this.resources = resources;
         this.resourceHistory = resourceHistory;
         this.studyLogs = studyLogs;
@@ -281,6 +291,33 @@ public class GeneratedApiController implements DefaultApi {
             Object body) {
         return ResponseEntity.ok(new InlineObject23().code("OK").message("success").requestId(requestIds.current())
                 .timestamp(OffsetDateTime.now()).data(mastery.unlock(studentId, knowledgeId)));
+    }
+
+    @Override public ResponseEntity<InlineObject19> getKnowledgeTree(String stageId, String gradeId,
+            String subjectId, Boolean enabledOnly) {
+        return ResponseEntity.ok(new InlineObject19().code("OK").message("success").requestId(requestIds.current())
+                .timestamp(OffsetDateTime.now())
+                .data(knowledgeNodes.tree(stageId, gradeId, subjectId, !Boolean.FALSE.equals(enabledOnly))));
+    }
+
+    @Override public ResponseEntity<InlineObject20> createKnowledgeNode(KnowledgeNodeCreateRequest request) {
+        return ResponseEntity.status(201).body(new InlineObject20().code("CREATED").message("created")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(knowledgeNodes.create(request)));
+    }
+
+    @Override public ResponseEntity<InlineObject20> updateKnowledgeNode(String knowledgeId,
+            KnowledgeNodeUpdateRequest request) {
+        return knowledgeNodeResponse(knowledgeNodes.update(knowledgeId, request));
+    }
+
+    @Override public ResponseEntity<InlineObject20> moveKnowledgeNode(String knowledgeId,
+            KnowledgeNodeMoveRequest request) {
+        return knowledgeNodeResponse(knowledgeNodes.move(knowledgeId, request));
+    }
+
+    @Override public ResponseEntity<InlineObject20> disableKnowledgeNode(String knowledgeId,
+            KnowledgeNodeDisableRequest request) {
+        return knowledgeNodeResponse(knowledgeNodes.disable(knowledgeId, request));
     }
 
     @Override public ResponseEntity<InlineObject30> listResources(Integer page, Integer pageSize) {
@@ -564,6 +601,12 @@ public class GeneratedApiController implements DefaultApi {
     private ResponseEntity<InlineObject1> planResponse(com.stdntedu.generated.model.StudyPlanDto plan) {
         return ResponseEntity.ok(new InlineObject1().code("OK").message("success")
                 .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(plan));
+    }
+
+    private ResponseEntity<InlineObject20> knowledgeNodeResponse(
+            com.stdntedu.generated.model.KnowledgeTreeNodeDto node) {
+        return ResponseEntity.ok(new InlineObject20().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(node));
     }
 
     private ResponseEntity<InlineObject2> taskResponse(com.stdntedu.generated.model.StudyPlanTaskDto task) {

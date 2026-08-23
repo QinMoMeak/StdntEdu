@@ -1,4 +1,33 @@
-# OpenAPI V3.8.0 冻结说明
+# OpenAPI V3.9.0 冻结说明
+
+## V3.9.0 Knowledge 知识体系契约闭环
+
+V3.9.0 是 Stage12A Knowledge 后端实现的新契约基线。该版本不新增路径或 operationId，只补齐
+既有 5 个 Knowledge operation 的真实输入、输出和并发语义。数据库基线仍为 Flyway V20，
+Mastery Algorithm 仍为 V1.0；`knowledge_node` 已有完整层级字段、全局唯一 `node_code`、
+`enabled/deleted`、`version` 和查询索引，因此不新增 V21。
+
+1. `KnowledgeNodeCreateRequest` 新增 DB 必填的 `nodeCode` 和 `nodeType`；`nodeCode` 对应数据库
+   全局唯一约束，API 与数据库 ID 仍分别使用 `string` 和 `BIGINT/Long`。
+2. 数据库、字典和历史设计没有冻结 `node_type` CHECK/枚举，且既有测试数据同时使用 `POINT` 与
+   `KNOWLEDGE_POINT`。V3.9.0 因此将其定义为必填、最长 32 字符的开放业务代码，不擅自发明枚举。
+3. 响应补齐 `nodeCode`、`nodeType`、`levelNo`、`difficulty`、`keywords`、`version`、
+   `createdAt` 和 `updatedAt`。API 字段 `name` 继续直接映射数据库 `knowledge_node.name`，不新增
+   同义 `nodeName`。
+4. update、move、disable 均使用 `version` 条件更新，成功后 `version+1`，旧版本返回
+   `409 DATA_VERSION_CONFLICT`。普通 update 不含 `parentId`，不得绕过专用 move 操作。
+5. 父节点的非空 stage/grade/subject 范围约束子节点；NULL 父范围表示更宽层级。grade 与 stage
+   同时提供时必须匹配。move 允许移动到根，禁止自身和任一后代作为父节点，只修改目标节点的
+   `parentId/sortOrder` 并同步维护子树 `levelNo`，不批量重排兄弟节点。
+6. disable 只将目标节点 `enabled=false`，不设置 `deleted`、不级联禁用后代、不删除任何历史关系。
+   disabled 控制未来业务选择；已有错题、学习计划、资源和 Mastery 历史继续保留。Mastery 历史可在
+   节点禁用后读取，人工调整和解锁仍要求节点启用。
+7. tree 使用一次 flat 节点查询后在内存组树，兄弟节点固定按 `sort_order,id` 排序。逻辑删除节点、
+   不可见父节点形成的孤儿和损坏循环不会被提升为根；空库正常返回 `200` 与空数组。
+8. 当前没有权威 Knowledge 内容种子，V3.9.0 不虚构学科知识体系；节点通过正式 CRUD 后续维护。
+
+本次新增 DB 必填请求字段并收紧 update 的层级变更入口，属于未实现 Knowledge 能力启用前的
+minor 契约闭环，不作为兼容性 patch。其他业务路径、字段类型、枚举和数据库语义均未修改。
 
 ## V3.8.0 AI Analysis 与 StudyPlan Generation 生命周期
 
@@ -387,7 +416,7 @@ V3.1.1 是阶段四考试与成绩模块的新契约基线，在 V3.1 的基础�
 
 ## 冻结结论
 
-OpenAPI V3.6.0 是阶段十B AI 错题识别开发的契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构、持久化映射、加密规则、视觉输入转换或计算公式。
+OpenAPI V3.9.0 是 Stage12A Knowledge 实现后的新契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构、持久化映射、加密规则、视觉输入转换或计算公式。
 
 本冻结包括统一响应模型、分页模型、错误模型、安全定义、文件上传下载约束、异步任务模型以及核心枚举。所有数据库 BIGINT ID 通过 API 返回 `string`。核心枚举编码与数据库 V1 至 V13 的 CHECK 约束保持一致。
 
@@ -405,7 +434,7 @@ OpenAPI V3.6.0 是阶段十B AI 错题识别开发的契约基线。后续开发
 
 ## 数据库边界
 
-数据库 V1 至 V18 已冻结，不得回写或重定义既有迁移的业务语义。V19 只完成本节列出的 AI 安全与数据闭环，不修改其他业务域或 system_config；后续数据库变更必须使用新的迁移版本。
+数据库 V1 至 V20 已冻结，不得回写或重定义既有迁移的业务语义。Stage12A 不新增 V21；后续数据库变更必须使用新的迁移版本。
 
 ## 安全边界
 

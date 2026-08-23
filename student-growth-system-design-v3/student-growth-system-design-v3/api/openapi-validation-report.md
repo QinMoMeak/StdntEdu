@@ -1,4 +1,32 @@
-# OpenAPI V3.8.0 验证报告
+# OpenAPI V3.9.0 验证报告
+
+## V3.9.0 Knowledge 契约与生成验证
+
+V3.9.0 在不增加路径和 operationId 的前提下，补齐 Knowledge 节点的 `nodeCode`、`nodeType`、
+`levelNo`、`difficulty`、`keywords`、`version` 和审计时间，并新增仅含必填 `version` 的
+`KnowledgeNodeDisableRequest`。普通更新不再承载 `parentId`，移动只能通过专用 operation 完成。
+
+- 文件 798 行；paths 86、operations 116、schemas 158；operationId 116/116/0。
+- `getKnowledgeTree`、`createKnowledgeNode`、`updateKnowledgeNode`、`moveKnowledgeNode`、
+  `disableKnowledgeNode` 的 operationId 与 URL 均保持不变。
+- Swagger CLI validate 通过。Redocly CLI 1.34.5 recommended lint 通过，errors 0、warnings 0；
+  最新 Redocly CLI 在 Node 24/Windows 输出验证成功后触发 libuv 退出断言，因此使用固定旧版完成
+  可重复的零错误/零警告验收。
+- OpenAPI Generator CLI 7.10.0 JAR validate 通过，仅保留 `Error`、`ResourceCreateRequest`、
+  `ResourceUpdateRequest`、`AiExtractionConfirmResultDto` 4 个既有未使用模型建议。
+- Java client models、TypeScript Fetch 和 Maven Spring generation 均成功。Java 的 Knowledge ID
+  为 `String`、version/levelNo 为 `Integer`、时间为 `OffsetDateTime`；TypeScript ID 为 `string`、
+  version/levelNo 为 `number`、时间为 `Date`。
+- Spring 生成接口中 5 个 operation 的请求 DTO 与 `String knowledgeId` 均显式可见；Controller
+  不读取 `HttpServletRequest` 或 URI template attribute 获取 Knowledge path 参数。全量 116 个生成操作
+  含 77 个 path variable，显式 `String @PathVariable` 缺口为 0。
+- 数据库 `knowledge_node.node_code` 为全局 UNIQUE；`node_type` 为 `VARCHAR(32) NOT NULL` 且无
+  CHECK/字典枚举。V3.9.0 保留开放代码语义，兼容既有 `POINT` 与 `KNOWLEDGE_POINT`。
+- Flyway 保持 V20，业务表保持 47，`system_config` 保持 31；schema-full 和 V1-V20 均未修改。
+- Knowledge 节点无权威初始化内容，空树返回 200 空数组，不新增虚构种子。
+- `StageTwelveAKnowledgeIntegrationTest` 新增 14 个 JUnit testcase，映射 54 个 Knowledge 专项验收场景；
+  `mvnw.cmd clean test` 与 `mvnw.cmd clean package` 均通过，tests 356、failures 0、errors 0、skipped 0。
+  Testcontainers MySQL 8 从空库执行 V1-V20 成功，最终版本 v20；可执行 Spring Boot JAR 打包成功。
 
 ## V3.8.0 AI Analysis 与 StudyPlan Generation 生命周期闭环
 

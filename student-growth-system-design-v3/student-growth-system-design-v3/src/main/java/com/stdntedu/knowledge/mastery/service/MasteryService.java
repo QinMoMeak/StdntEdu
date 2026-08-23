@@ -90,7 +90,7 @@ public class MasteryService {
         Long student = ids.toLong(studentId);
         Long node = ids.toLong(knowledgeId);
         requireStudent(student);
-        requireKnowledge(node);
+        requireKnowledge(node, false);
         Page<MasteryHistoryEntity> result = history.selectPage(new Page<>(page, pageSize),
                 Wrappers.<MasteryHistoryEntity>lambdaQuery().eq(MasteryHistoryEntity::getStudentId, student)
                         .eq(MasteryHistoryEntity::getKnowledgeId, node)
@@ -106,7 +106,7 @@ public class MasteryService {
         Long student = ids.toLong(request.getStudentId());
         Long node = ids.toLong(knowledgeId);
         requireStudent(student);
-        requireKnowledge(node);
+        requireKnowledge(node, true);
         validateAdjustment(request);
         MasteryAlgorithmConfig config = configService.load();
         StudentMasteryEntity current = find(student, node);
@@ -144,7 +144,7 @@ public class MasteryService {
         Long student = ids.toLong(studentId);
         Long node = ids.toLong(knowledgeId);
         requireStudent(student);
-        requireKnowledge(node);
+        requireKnowledge(node, true);
         StudentMasteryEntity current = requireCurrent(student, node);
         if (!Boolean.TRUE.equals(current.getManualLocked())) {
             throw conflict("mastery is not manually locked");
@@ -338,9 +338,9 @@ public class MasteryService {
         if (students.selectById(studentId) == null) throw new ResourceNotFoundException("student not found");
     }
 
-    private KnowledgeNodeReferenceEntity requireKnowledge(Long knowledgeId) {
+    private KnowledgeNodeReferenceEntity requireKnowledge(Long knowledgeId, boolean enabledRequired) {
         KnowledgeNodeReferenceEntity node = knowledge.selectById(knowledgeId);
-        if (node == null || !Boolean.TRUE.equals(node.getEnabled())) {
+        if (node == null || (enabledRequired && !Boolean.TRUE.equals(node.getEnabled()))) {
             throw new ResourceNotFoundException("knowledge node not found");
         }
         return node;

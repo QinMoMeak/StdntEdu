@@ -529,3 +529,15 @@ Java 与 TypeScript 抽查模型均生成成功：`StudentDto`、`ExamDto`、`Wr
 - Flyway 数据库基线升级到 V21；业务表仍为 47，`system_config` 仍为 31。V21 只补齐 `import_task` / `export_task` 生命周期、范围、计数、进度、持久文件引用和状态约束，两份迁移逐字一致。
 - Stage12D 完成 12 个公开 Import/Export operation；Controller 实现操作数为 100，剩余默认 501 为 16。Stage12E Backup/Restore 与 GrowthReport 仍未实现。
 - `mvnw.cmd clean test` 与 `mvnw.cmd clean package` 均以 400 tests、0 failures、0 errors、0 skipped 通过；Testcontainers MySQL 8 从空库执行 V1-V21 成功，Spring Boot 可执行 JAR 打包成功。
+
+## V3.13.0 Backup / Restore 验证
+
+- OpenAPI 文件共 823 行，包含 86 个路径模板、116 个操作、116 个唯一 operationId、165 个 Schema、70 个 Response 组件和 21 个 Parameter 组件；重复 operationId 与 PathVariable 缺口均为 0，公开操作数量未增加。
+- Backup 固定为应用级逻辑备份格式 `STDNTEDU_BACKUP_V1`、`schemaVersion=1`、`ZIP_DEFLATE` 和 `BackupType.FULL`。默认 `secretMode=EXCLUDE`；`INCLUDE_ENCRYPTED` 只纳入已有密文并使用主密钥指纹进行恢复前兼容校验。
+- Restore V1 固定为 `REPLACE`，保留原 BIGINT ID，并在单个 MySQL 事务中替换可恢复业务数据；Flyway history、系统种子和 `system_config` 不参与恢复。附件通过持久 checkpoint 与 `FINALIZING` 恢复路径处理数据库提交后的收尾中断。
+- ZIP Verify/Restore 复用共享安全校验，拒绝目录穿越、绝对/盘符/UNC 路径、symlink、重复条目、未声明 payload，以及超限条目数、单条目大小、总解压大小和压缩比。下载文件名由服务端生成，不暴露持久存储绝对路径。
+- Swagger CLI 校验通过；Redocly errors 0、warnings 0；OpenAPI Generator 7.10.0 JAR validate、Java client、TypeScript Fetch 和 Maven Spring generation 均通过。Node 24 下 npx wrapper 仍在命令转发前失败，因此按既有治理方案使用同版本 JAR；validate 仅保留 7 个既有未使用模型建议。
+- Java 抽查确认 `Backup.id`、`RestoreTaskDto.taskId`、`RestoreTaskDto.backupId` 均为 `String`；TypeScript 对应字段均为 `string`。BackupStatus、RestoreStatus 和 RestorePhase 均生成独立枚举。
+- Flyway 数据库基线升级到 V22；业务表仍为 47，`system_config` 仍为 31。V22 只补齐 `backup_record` / `restore_record` 生命周期、格式、校验摘要、恢复选项与 checkpoint，两份迁移 SHA-256 均为 `C15C299801BE5FD57B4448807877A4D9B1D266A2D098D5770A18C38EFD2C47FE`。
+- Stage12E 完成 10 个公开 Backup/Restore operation；Controller 实现操作数为 110，剩余默认 501 为 6，均属于 GrowthReport。
+- `mvnw.cmd clean test` 与 `mvnw.cmd clean package` 均以 407 tests、0 failures、0 errors、0 skipped 通过；Testcontainers MySQL 8 从空库执行 V1-V22 成功，Spring Boot 可执行 JAR 打包成功。

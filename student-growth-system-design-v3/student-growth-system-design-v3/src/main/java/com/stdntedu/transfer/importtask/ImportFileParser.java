@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stdntedu.common.exception.BusinessException;
+import com.stdntedu.common.file.ZipArchiveSafety;
 import com.stdntedu.generated.model.ExamCreate;
 import com.stdntedu.generated.model.ImportType;
 import com.stdntedu.generated.model.KnowledgeNodeCreateRequest;
@@ -98,8 +99,9 @@ public class ImportFileParser {
                 ZipArchiveEntry entry = entries.nextElement();
                 if (entry.isDirectory()) continue;
                 if (++count > MAX_ENTRIES) throw invalid("ZIP exceeds entry limit");
-                String name = entry.getName().replace('\\', '/');
-                validateEntryName(name, entry);
+                String name;
+                try { name = ZipArchiveSafety.safeEntryName(entry, MAX_ENTRY_BYTES, MAX_RATIO); }
+                catch (IllegalArgumentException ex) { throw invalid(ex.getMessage()); }
                 String suffix = suffix(name);
                 if (".zip".equals(suffix)) throw invalid("nested ZIP is not supported");
                 if (!Set.of(".csv", ".xlsx", ".json").contains(suffix)) {
@@ -107,12 +109,6 @@ public class ImportFileParser {
                 }
                 if ((type == ImportType.SCORE || type == ImportType.WRONG_QUESTION)
                         && !".json".equals(suffix)) throw invalid("nested data import requires JSON");
-                long size = entry.getSize();
-                long compressed = entry.getCompressedSize();
-                if (size > MAX_ENTRY_BYTES) throw invalid("ZIP entry exceeds size limit");
-                if (size > 0 && compressed > 0 && (double) size / compressed > MAX_RATIO) {
-                    throw invalid("ZIP compression ratio exceeds limit");
-                }
                 byte[] bytes;
                 try (InputStream input = zip.getInputStream(entry)) {
                     bytes = readBounded(input, MAX_ENTRY_BYTES);
@@ -253,12 +249,6 @@ public class ImportFileParser {
         String value = formatter.formatCellValue(cell);
         checkString(value);
         return value;
-    }
-
-    private void validateEntryName(String name, ZipArchiveEntry entry) {
-        if (name.isBlank() || name.startsWith("/") || name.startsWith("//") || name.matches("^[A-Za-z]:.*")
-                || name.split("/").length == 0 || java.util.Arrays.asList(name.split("/")).contains("..")
-                || entry.isUnixSymlink()) throw invalid("ZIP entry path is unsafe");
     }
 
     private PushbackInputStream withoutUtf8Bom(InputStream input) throws IOException {

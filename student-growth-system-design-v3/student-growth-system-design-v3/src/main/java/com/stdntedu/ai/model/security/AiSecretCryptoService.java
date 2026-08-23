@@ -5,7 +5,10 @@ import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.HexFormat;
 import java.util.Arrays;
 import java.util.Base64;
 
@@ -73,6 +76,20 @@ public class AiSecretCryptoService {
             throw new IllegalStateException("AI secret decryption failed", ex);
         } finally {
             if (plainBytes != null) Arrays.fill(plainBytes, (byte) 0);
+        }
+    }
+
+    public String masterKeyFingerprint() {
+        byte[] encoded = key().getEncoded();
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update("stdntedu-ai-master-key-v1".getBytes(StandardCharsets.UTF_8));
+            digest.update(encoded);
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is unavailable", ex);
+        } finally {
+            Arrays.fill(encoded, (byte) 0);
         }
     }
 

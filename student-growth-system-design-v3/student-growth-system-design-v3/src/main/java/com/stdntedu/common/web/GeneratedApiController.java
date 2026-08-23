@@ -27,6 +27,14 @@ import com.stdntedu.generated.model.AiExtractionQuestionUpdateRequest;
 import com.stdntedu.generated.model.CancelAiExtractionRequest;
 import com.stdntedu.generated.model.CancelExportRequest;
 import com.stdntedu.generated.model.CancelImportRequest;
+import com.stdntedu.generated.model.BackupCreate;
+import com.stdntedu.generated.model.BackupPageResponse;
+import com.stdntedu.generated.model.BackupStatus;
+import com.stdntedu.generated.model.BackupType;
+import com.stdntedu.generated.model.RestoreCancelRequest;
+import com.stdntedu.generated.model.RestoreCreate;
+import com.stdntedu.generated.model.RestoreStatus;
+import com.stdntedu.generated.model.RestoreTaskPageResponse;
 import com.stdntedu.generated.model.RetryAiExtractionRequest;
 import com.stdntedu.generated.model.WrongSource;
 import com.stdntedu.generated.model.ExamCreate;
@@ -78,6 +86,9 @@ import com.stdntedu.generated.model.InlineObject33;
 import com.stdntedu.generated.model.InlineObject34;
 import com.stdntedu.generated.model.InlineObject35;
 import com.stdntedu.generated.model.InlineObject36;
+import com.stdntedu.generated.model.InlineObject37;
+import com.stdntedu.generated.model.InlineObject38;
+import com.stdntedu.generated.model.InlineObject;
 import com.stdntedu.generated.model.InlineObject11;
 import com.stdntedu.generated.model.InlineObject12;
 import com.stdntedu.generated.model.ReviewCreate;
@@ -129,6 +140,8 @@ import com.stdntedu.generated.model.WrongUpdate;
 import com.stdntedu.growth.event.service.GrowthEventService;
 import com.stdntedu.transfer.exporttask.ExportTaskService;
 import com.stdntedu.transfer.importtask.ImportTaskService;
+import com.stdntedu.backup.service.BackupService;
+import com.stdntedu.backup.service.RestoreService;
 import com.stdntedu.student.service.AcademicTermService;
 import com.stdntedu.student.service.StudentService;
 import com.stdntedu.wrongquestion.service.WrongQuestionService;
@@ -168,6 +181,8 @@ public class GeneratedApiController implements DefaultApi {
     private final GrowthEventService growthEvents;
     private final ImportTaskService importTasks;
     private final ExportTaskService exportTasks;
+    private final BackupService backups;
+    private final RestoreService restores;
     private final RequestIdProvider requestIds;
 
     public GeneratedApiController(BaseDataService baseData, StudentService students, AcademicTermService terms,
@@ -180,6 +195,7 @@ public class GeneratedApiController implements DefaultApi {
             AiExtractionQuestionService extractionQuestions,
             AiExtractionConfirmationService extractionConfirmations, AttachmentService attachments,
             GrowthEventService growthEvents, ImportTaskService importTasks, ExportTaskService exportTasks,
+            BackupService backups, RestoreService restores,
             RequestIdProvider requestIds) {
         this.baseData = baseData;
         this.students = students;
@@ -204,6 +220,8 @@ public class GeneratedApiController implements DefaultApi {
         this.growthEvents = growthEvents;
         this.importTasks = importTasks;
         this.exportTasks = exportTasks;
+        this.backups = backups;
+        this.restores = restores;
         this.requestIds = requestIds;
     }
 
@@ -744,6 +762,55 @@ public class GeneratedApiController implements DefaultApi {
         return fileResponse(download.content(), download.fileName(), download.mimeType(), download.size());
     }
 
+    @Override public ResponseEntity<BackupPageResponse> listBackups(BackupType backupType, BackupStatus status,
+            OffsetDateTime startTime, OffsetDateTime endTime, Integer page, Integer pageSize) {
+        return ResponseEntity.ok(new BackupPageResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(backups.list(backupType, status, startTime, endTime, page, pageSize)));
+    }
+
+    @Override public ResponseEntity<InlineObject37> createBackup(BackupCreate request) {
+        return backupResponse(backups.create(request), "ACCEPTED", "accepted", 202);
+    }
+
+    @Override public ResponseEntity<InlineObject37> getBackup(String backupId) {
+        return backupResponse(backups.get(backupId), "OK", "success", 200);
+    }
+
+    @Override public ResponseEntity<Void> deleteBackup(String backupId) {
+        backups.delete(backupId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override public ResponseEntity<Resource> downloadBackup(String backupId) {
+        var download = backups.download(backupId);
+        return fileResponse(download.content(), download.fileName(), "application/zip", download.size());
+    }
+
+    @Override public ResponseEntity<InlineObject> verifyBackup(String backupId) {
+        return ResponseEntity.ok(new InlineObject().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(backups.verify(backupId)));
+    }
+
+    @Override public ResponseEntity<InlineObject38> createRestoreTask(String backupId, RestoreCreate request) {
+        return restoreResponse(restores.create(backupId, request), "ACCEPTED", "accepted", 202);
+    }
+
+    @Override public ResponseEntity<RestoreTaskPageResponse> listRestoreTasks(String backupId, RestoreStatus status,
+            OffsetDateTime startTime, OffsetDateTime endTime, Integer page, Integer pageSize) {
+        return ResponseEntity.ok(new RestoreTaskPageResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(restores.list(backupId, status, startTime, endTime, page, pageSize)));
+    }
+
+    @Override public ResponseEntity<InlineObject38> getRestoreTask(String taskId) {
+        return restoreResponse(restores.get(taskId), "OK", "success", 200);
+    }
+
+    @Override public ResponseEntity<InlineObject38> cancelRestoreTask(String taskId, RestoreCancelRequest request) {
+        return restoreResponse(restores.cancel(taskId, request), "OK", "success", 200);
+    }
+
     private ResponseEntity<InlineObject35> importResponse(com.stdntedu.generated.model.ImportTaskDto task,
             String code, String message, int status) {
         InlineObject35 body = new InlineObject35().code(code).message(message).requestId(requestIds.current())
@@ -756,6 +823,18 @@ public class GeneratedApiController implements DefaultApi {
         InlineObject36 body = new InlineObject36().code(code).message(message).requestId(requestIds.current())
                 .timestamp(OffsetDateTime.now()).data(task);
         return ResponseEntity.status(status).body(body);
+    }
+
+    private ResponseEntity<InlineObject37> backupResponse(com.stdntedu.generated.model.Backup backup,
+            String code, String message, int status) {
+        return ResponseEntity.status(status).body(new InlineObject37().code(code).message(message)
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(backup));
+    }
+
+    private ResponseEntity<InlineObject38> restoreResponse(com.stdntedu.generated.model.RestoreTaskDto restore,
+            String code, String message, int status) {
+        return ResponseEntity.status(status).body(new InlineObject38().code(code).message(message)
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(restore));
     }
 
     private ResponseEntity<Resource> fileResponse(Resource content, String fileName, String mimeType, long size) {

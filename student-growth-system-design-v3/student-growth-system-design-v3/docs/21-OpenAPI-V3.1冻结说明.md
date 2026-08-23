@@ -530,3 +530,32 @@ Student 自动 code 生成在数据库唯一冲突时最多重试 5 次；仅识
 新增解析依赖为 Apache POI 5.5.1、Commons CSV 1.14.1、Commons Compress 1.28.0，均为 Apache-2.0；`commons-lang3` 固定为 3.18.0 以满足 Compress 运行时要求。Stage12E Backup/Restore、GrowthReport 和前端不属于本基线。
 
 最终 `mvnw.cmd clean test` 与 `mvnw.cmd clean package` 均以 400/0/0/0 通过；Swagger、Redocly、Generator validate、Java、TypeScript Fetch 和 Maven Spring generation 均通过。Testcontainers MySQL 8 最终版本为 v21，业务表 47，`system_config` 31。
+
+## V3.13.0 与 Flyway V22 Backup / Restore 基线
+
+OpenAPI V3.13.0 是 Stage12E 完成后的 Backup / Restore 契约基线。数据库基线升级为 Flyway V22；V1-V21 继续冻结。V22 仅补齐 `backup_record` 和 `restore_record` 的格式、生命周期、校验摘要、恢复选项与持久 checkpoint，不新增业务表或系统配置；业务表仍为 47，`system_config` 仍为 31。
+
+### 备份格式与内容
+
+1. Local V1 只生成 `STDNTEDU_BACKUP_V1`、`schemaVersion=1` 的应用级逻辑 ZIP，压缩方式固定 `ZIP_DEFLATE`，整包加密固定为 false。SUCCESS artifact 存放在正式本地持久存储中，临时目录只用于生成和 staging。
+2. Manifest 记录 application/OpenAPI/database 版本、Asia/Shanghai 时区、数据集和记录数量、附件数量、总字节数、压缩与 Secret 模式、每个 payload 的大小和 SHA-256。最终 ZIP 的 SHA-256 仅存入 `backup_record`，避免自引用。
+3. 纳入备份：用户学生/学期/知识/考试成绩/错题复习/掌握度/学习资源与历史/学习日志/成长事件/计划与操作历史/推荐/报告；用户字典项；终态 AI analysis；终态 AI extraction 及已完成确认；AI model；按选项纳入附件元数据、关系与物理文件；按 Secret 模式纳入 `ai_secret` 密文。
+4. 排除备份：stage、grade、subject、dict_type 和系统字典项；`system_config`、prompt template、Flyway history、operation log；PENDING/RUNNING AI 任务；Import/Export 任务及 artifact；Backup/Restore 记录、旧备份包和恢复 staging。
+5. 系统种子、算法配置、运行时关键配置与 Flyway history 以当前应用版本为权威，Restore 不覆盖。运行中外部 Provider 任务不会被恢复并重新执行。
+
+### 附件与 Secret
+
+1. 附件集合来自数据库一致性快照；随后逐文件复制并核对 size 与 SHA-256。文件缺失或变化会使 Backup FAILED，不生成不完整 SUCCESS。Restore 先解压到受限 staging，校验全部 hash，再写入持久存储并进入数据库事务。
+2. `secretMode=EXCLUDE` 为默认值；不会备份 `ai_secret`，恢复 `ai_model` 时清空 `api_key_ref`，不创建虚假 Secret。
+3. `INCLUDE_ENCRYPTED` 只保存现有密文字段和 domain-separated SHA-256 master-key fingerprint。外部主密钥、明文 API key、Authorization 和数据库密码永不进入 manifest、ZIP、API 或日志。恢复 Secret 前 fingerprint 必须匹配，否则在修改业务数据前失败。
+
+### 生命周期与恢复语义
+
+1. Backup 状态机固定为 `PENDING -> RUNNING -> SUCCESS|FAILED`。Verify 只校验已有 SUCCESS artifact；Download 只流式下载 SUCCESS ZIP；Delete 先删除物理 artifact，再逻辑删除记录，物理删除失败不得返回成功。
+2. Restore 状态机固定为 `PENDING -> RUNNING -> SUCCESS|FAILED`，并支持 `PENDING -> CANCELLED` 及 RUNNING 安全 checkpoint 前的 best-effort cancel。内部阶段为 `QUEUED/VERIFYING/STAGING/APPLYING/FINALIZING/COMPLETED/FAILED/CANCELLED`。
+3. Local V1 只支持 `REPLACE`，选项固定为 `restoreAttachments`、`restoreAiSecrets`，不支持 MERGE、UPSERT、APPEND 或自动 pre-restore backup。来源必须是已经 SUCCESS 且通过 Verify 的持久 Backup artifact。
+4. 可恢复业务数据在单个 MySQL 事务中删除并按原 BIGINT ID 重建，FK 和显式 ID 保持一致；MySQL 后续 AUTO_INCREMENT 必须继续大于恢复最大 ID。Flyway history、系统种子与 `system_config` 不参与该事务。
+5. 附件文件系统无法加入 MySQL 事务，因此先持久化新文件并记录 checkpoint，再原子提交数据库替换，最后删除旧文件。数据库提交后若 finalization 中断，任务保持 `RUNNING/FINALIZING`，重启或周期扫描继续收尾；数据库提交前中断则清理 staging 并安全重置任务。
+6. Backup 与 Restore 共用单线程有界 executor、数据库命名锁、DB CAS 与有限批次周期 rescan；executor 拒绝时任务保留 PENDING。Local V1 同时只执行一个 Backup/Restore 重任务。
+
+ZIP Verify/Restore 复用共享安全组件，拒绝 traversal、绝对/盘符/UNC 路径、symlink、重复条目、超限条目/总解压大小/压缩比及未声明 payload。所有下载文件名由服务端生成，不返回持久存储绝对路径。

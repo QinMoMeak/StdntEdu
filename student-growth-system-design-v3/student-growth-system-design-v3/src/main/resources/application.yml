@@ -43,3 +43,10 @@ app:
       batch-size: 50
       fixed-delay-ms: 30000
       initial-delay-ms: 30000
+  backup-restore:
+    executor:
+      queue-capacity: 10
+    pending-rescan:
+      batch-size: 20
+      fixed-delay-ms: 30000
+      initial-delay-ms: 30000

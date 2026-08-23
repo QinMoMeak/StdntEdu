@@ -305,6 +305,40 @@ class FlywayMigrationIntegrationTest {
             v1ToV20Checksums = appliedChecksums(v20Flyway, 20);
         }
 
+        Flyway v21Flyway = Flyway.configure()
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .locations("classpath:db/migration")
+                .target(MigrationVersion.fromVersion("21"))
+                .load();
+        v21Flyway.migrate();
+
+        List<String> schemaBeforeV22;
+        Map<String, Integer> v1ToV21Checksums;
+
+        try (Connection connection = DriverManager.getConnection(
+                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
+            assertEquals("21", v21Flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV20Checksums, appliedChecksums(v21Flyway, 20));
+            assertEquals(47, countBusinessTables(connection));
+            assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
+            assertEquals(schemaBeforeV21, schemaSignatureWithoutImportExport(connection));
+            assertImportExportV21Definition(connection);
+            assertSchemaFullImportExportV21Matches(connection);
+            assertV21MigrationCopiesAndHashesMatch();
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate("""
+                        INSERT INTO backup_record(id,backup_code,backup_type,status)
+                        VALUES(900022,'BKP-V22-LEGACY','FULL','EXPIRED')
+                        """);
+                statement.executeUpdate("""
+                        INSERT INTO restore_record(id,restore_code,backup_id,status,progress_stage)
+                        VALUES(900022,'RST-V22-LEGACY',900022,'VALIDATING','VALIDATING')
+                        """);
+            }
+            schemaBeforeV22 = schemaSignatureWithoutBackupRestore(connection);
+            v1ToV21Checksums = appliedChecksums(v21Flyway, 21);
+        }
+
         Flyway flyway = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration")
@@ -314,14 +348,23 @@ class FlywayMigrationIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
             assertExecutedVersions(flyway);
-            assertEquals("21", flyway.info().current().getVersion().toString());
-            assertEquals(v1ToV20Checksums, appliedChecksums(flyway, 20));
+            assertEquals("22", flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV21Checksums, appliedChecksums(flyway, 21));
             assertEquals(47, countBusinessTables(connection));
             assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
-            assertEquals(schemaBeforeV21, schemaSignatureWithoutImportExport(connection));
-            assertImportExportV21Definition(connection);
-            assertSchemaFullImportExportV21Matches(connection);
-            assertV21MigrationCopiesAndHashesMatch();
+            assertEquals(schemaBeforeV22, schemaSignatureWithoutBackupRestore(connection));
+            assertBackupRestoreV22Definition(connection);
+            assertEquals(1, queryInt(connection, """
+                    SELECT COUNT(*) FROM backup_record
+                    WHERE id=900022 AND status='FAILED' AND deleted=1
+                      AND error_code='LEGACY_BACKUP_UNAVAILABLE'
+                    """));
+            assertEquals(1, queryInt(connection, """
+                    SELECT COUNT(*) FROM restore_record
+                    WHERE id=900022 AND backup_id=900022 AND status='FAILED' AND progress_stage='FAILED'
+                      AND error_code='LEGACY_RESTORE_INTERRUPTED'
+                    """));
+            assertV22MigrationCopiesAndHashesMatch();
         }
     }
 
@@ -791,7 +834,7 @@ class FlywayMigrationIntegrationTest {
                 .toList();
 
         assertEquals(
-                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"),
+                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"),
                 versions);
     }
 
@@ -971,6 +1014,45 @@ class FlywayMigrationIntegrationTest {
                   AND table_name NOT IN ('import_task', 'export_task')
                 ORDER BY table_name, ordinal_position
                 """);
+    }
+
+    private List<String> schemaSignatureWithoutBackupRestore(Connection connection) throws SQLException {
+        return queryStrings(connection, """
+                SELECT CONCAT_WS('|', table_name, column_name, ordinal_position, column_type,
+                                  is_nullable, COALESCE(column_default, '<NULL>'), column_key, extra)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name <> 'flyway_schema_history'
+                  AND table_name NOT IN ('backup_record', 'restore_record')
+                ORDER BY table_name, ordinal_position
+                """);
+    }
+
+    private void assertBackupRestoreV22Definition(Connection connection) throws Exception {
+        for (String column : List.of("format", "manifest_schema_version", "compression", "secret_mode",
+                "include_attachments", "database_version", "dataset_count", "record_count", "attachment_count",
+                "manifest_json", "error_code", "start_time", "verified_time", "update_time", "deleted")) {
+            assertEquals(1, queryInt(connection, """
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_schema=DATABASE() AND table_name='backup_record' AND column_name=?
+                    """, column));
+        }
+        for (String column : List.of("options_json", "input_manifest_json", "checkpoint_json",
+                "cancel_requested", "database_applied", "files_finalized", "restored_table_count",
+                "restored_attachment_count", "warning_count", "error_code", "start_time", "update_time")) {
+            assertEquals(1, queryInt(connection, """
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_schema=DATABASE() AND table_name='restore_record' AND column_name=?
+                    """, column));
+        }
+        assertCheckContains(connection, "chk_br_status_v22", List.of("PENDING", "RUNNING", "SUCCESS", "FAILED"));
+        assertCheckContains(connection, "chk_br_secret_mode_v22", List.of("EXCLUDE", "INCLUDE_ENCRYPTED"));
+        assertCheckContains(connection, "chk_rr_status_v22", List.of("PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED"));
+        assertCheckContains(connection, "chk_rr_phase_v22", List.of("QUEUED", "VERIFYING", "STAGING", "APPLYING", "FINALIZING", "COMPLETED", "FAILED", "CANCELLED"));
+        String schema = Files.readString(Path.of("database", "schema-full.sql"));
+        assertTrue(schema.contains("manifest_schema_version INT NOT NULL DEFAULT 1"));
+        assertTrue(schema.contains("checkpoint_json JSON"));
+        assertTrue(schema.contains("chk_rr_status_v22"));
     }
 
     private void assertImportExportV21Definition(Connection connection) throws SQLException {
@@ -1646,6 +1728,14 @@ class FlywayMigrationIntegrationTest {
         Path design = Path.of("database", "flyway", "V21__complete_import_export_lifecycle.sql");
         Path runtime = Path.of("src", "main", "resources", "db", "migration",
                 "V21__complete_import_export_lifecycle.sql");
+        assertArrayEquals(Files.readAllBytes(design), Files.readAllBytes(runtime));
+        assertEquals(sha256(design), sha256(runtime));
+    }
+
+    private void assertV22MigrationCopiesAndHashesMatch() throws Exception {
+        Path design = Path.of("database", "flyway", "V22__complete_backup_restore_lifecycle.sql");
+        Path runtime = Path.of("src", "main", "resources", "db", "migration",
+                "V22__complete_backup_restore_lifecycle.sql");
         assertArrayEquals(Files.readAllBytes(design), Files.readAllBytes(runtime));
         assertEquals(sha256(design), sha256(runtime));
     }

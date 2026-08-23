@@ -44,6 +44,12 @@ import com.stdntedu.generated.model.DashboardResponse;
 import com.stdntedu.generated.model.GrowthEventCreateRequest;
 import com.stdntedu.generated.model.GrowthEventPageResponse;
 import com.stdntedu.generated.model.GrowthEventUpdateRequest;
+import com.stdntedu.generated.model.GrowthReportCancelRequest;
+import com.stdntedu.generated.model.GrowthReportCreateRequest;
+import com.stdntedu.generated.model.GrowthReportPageResponse;
+import com.stdntedu.generated.model.GrowthReportRegenerateRequest;
+import com.stdntedu.generated.model.GrowthReportStatus;
+import com.stdntedu.generated.model.ReportType;
 import com.stdntedu.generated.model.ExportCreateRequest;
 import com.stdntedu.generated.model.ExportFormat;
 import com.stdntedu.generated.model.ExportTaskPageResponse;
@@ -64,6 +70,7 @@ import com.stdntedu.generated.model.InlineObject20;
 import com.stdntedu.generated.model.InlineObject1;
 import com.stdntedu.generated.model.InlineObject2;
 import com.stdntedu.generated.model.InlineObject3;
+import com.stdntedu.generated.model.InlineObject4;
 import com.stdntedu.generated.model.InlineObject21;
 import com.stdntedu.generated.model.InlineObject22;
 import com.stdntedu.generated.model.InlineObject23;
@@ -138,6 +145,7 @@ import com.stdntedu.generated.model.StudentUpdate;
 import com.stdntedu.generated.model.WrongCreate;
 import com.stdntedu.generated.model.WrongUpdate;
 import com.stdntedu.growth.event.service.GrowthEventService;
+import com.stdntedu.growth.report.service.GrowthReportService;
 import com.stdntedu.transfer.exporttask.ExportTaskService;
 import com.stdntedu.transfer.importtask.ImportTaskService;
 import com.stdntedu.backup.service.BackupService;
@@ -179,6 +187,7 @@ public class GeneratedApiController implements DefaultApi {
     private final AiExtractionConfirmationService extractionConfirmations;
     private final AttachmentService attachments;
     private final GrowthEventService growthEvents;
+    private final GrowthReportService growthReports;
     private final ImportTaskService importTasks;
     private final ExportTaskService exportTasks;
     private final BackupService backups;
@@ -194,7 +203,8 @@ public class GeneratedApiController implements DefaultApi {
             AiStudyPlanGenerationService aiStudyPlanGeneration, AiExtractionService aiExtractions,
             AiExtractionQuestionService extractionQuestions,
             AiExtractionConfirmationService extractionConfirmations, AttachmentService attachments,
-            GrowthEventService growthEvents, ImportTaskService importTasks, ExportTaskService exportTasks,
+            GrowthEventService growthEvents, GrowthReportService growthReports,
+            ImportTaskService importTasks, ExportTaskService exportTasks,
             BackupService backups, RestoreService restores,
             RequestIdProvider requestIds) {
         this.baseData = baseData;
@@ -218,6 +228,7 @@ public class GeneratedApiController implements DefaultApi {
         this.extractionConfirmations = extractionConfirmations;
         this.attachments = attachments;
         this.growthEvents = growthEvents;
+        this.growthReports = growthReports;
         this.importTasks = importTasks;
         this.exportTasks = exportTasks;
         this.backups = backups;
@@ -514,6 +525,38 @@ public class GeneratedApiController implements DefaultApi {
     @Override public ResponseEntity<Void> deleteGrowthEvent(Integer version, String eventId) {
         growthEvents.delete(eventId, version);
         return ResponseEntity.noContent().build();
+    }
+
+    @Override public ResponseEntity<GrowthReportPageResponse> listGrowthReports(String studentId,
+            ReportType reportType, GrowthReportStatus status, java.time.LocalDate startDate,
+            java.time.LocalDate endDate, Integer page, Integer pageSize) {
+        return ResponseEntity.ok(new GrowthReportPageResponse().code("OK").message("success")
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now())
+                .data(growthReports.list(studentId, reportType, status, startDate, endDate, page, pageSize)));
+    }
+
+    @Override public ResponseEntity<InlineObject4> createGrowthReport(GrowthReportCreateRequest request) {
+        return reportResponse(growthReports.create(request), "ACCEPTED", "accepted", 202);
+    }
+
+    @Override public ResponseEntity<InlineObject4> getGrowthReport(String reportId) {
+        return reportResponse(growthReports.get(reportId), "OK", "success", 200);
+    }
+
+    @Override public ResponseEntity<InlineObject4> regenerateGrowthReport(String reportId,
+            GrowthReportRegenerateRequest request) {
+        return reportResponse(growthReports.regenerate(reportId, request), "ACCEPTED", "accepted", 202);
+    }
+
+    @Override public ResponseEntity<InlineObject4> cancelGrowthReport(String reportId,
+            GrowthReportCancelRequest request) {
+        return reportResponse(growthReports.cancel(reportId), "OK", "success", 200);
+    }
+
+    @Override public ResponseEntity<Resource> exportGrowthReport(String format, String reportId,
+            Boolean includeAttachments) {
+        var download = growthReports.export(reportId, format, includeAttachments);
+        return fileResponse(download.content(), download.fileName(), download.mimeType(), download.size());
     }
 
     @Override public ResponseEntity<StudyPlanPageResponse> listStudyPlans(String studentId, StudyPlanStatus status,
@@ -835,6 +878,12 @@ public class GeneratedApiController implements DefaultApi {
             String code, String message, int status) {
         return ResponseEntity.status(status).body(new InlineObject38().code(code).message(message)
                 .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(restore));
+    }
+
+    private ResponseEntity<InlineObject4> reportResponse(com.stdntedu.generated.model.GrowthReportDto report,
+            String code, String message, int status) {
+        return ResponseEntity.status(status).body(new InlineObject4().code(code).message(message)
+                .requestId(requestIds.current()).timestamp(OffsetDateTime.now()).data(report));
     }
 
     private ResponseEntity<Resource> fileResponse(Resource content, String fileName, String mimeType, long size) {

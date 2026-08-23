@@ -290,6 +290,13 @@ public class LogicalBackupDataService {
 
     public record Snapshot(List<DataFile> datasets, List<AttachmentSource> attachments, long recordCount,
             String databaseVersion) { }
+
+    public String currentDatabaseVersion() {
+        return jdbc.queryForObject(
+                "SELECT version FROM flyway_schema_history WHERE success=1 ORDER BY installed_rank DESC LIMIT 1",
+                String.class);
+    }
+
     public record DataFile(Path path, Entry entry) { }
     public record AttachmentSource(Long id, String fileName, Path path, String mimeType, long size, String sha256) { }
     public record RestoreResult(int tableCount, long rowCount) { }

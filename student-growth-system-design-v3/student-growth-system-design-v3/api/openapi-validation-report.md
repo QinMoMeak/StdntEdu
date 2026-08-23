@@ -541,3 +541,14 @@ Java 与 TypeScript 抽查模型均生成成功：`StudentDto`、`ExamDto`、`Wr
 - Flyway 数据库基线升级到 V22；业务表仍为 47，`system_config` 仍为 31。V22 只补齐 `backup_record` / `restore_record` 生命周期、格式、校验摘要、恢复选项与 checkpoint，两份迁移 SHA-256 均为 `C15C299801BE5FD57B4448807877A4D9B1D266A2D098D5770A18C38EFD2C47FE`。
 - Stage12E 完成 10 个公开 Backup/Restore operation；Controller 实现操作数为 110，剩余默认 501 为 6，均属于 GrowthReport。
 - `mvnw.cmd clean test` 与 `mvnw.cmd clean package` 均以 407 tests、0 failures、0 errors、0 skipped 通过；Testcontainers MySQL 8 从空库执行 V1-V22 成功，Spring Boot 可执行 JAR 打包成功。
+
+## V3.14.0 Growth Report 验证
+
+- OpenAPI 文件共 777 行，包含 86 个路径模板、116 个操作、116 个唯一 operationId、167 个 Schema、70 个 Response 组件和 21 个 Parameter 组件；重复 operationId 与 PathVariable 缺口均为 0，公开操作数量未增加。
+- Growth Report 固定为确定性异步生成。请求、结果快照、版本、状态、进度、取消、错误、时间和 source report chain 均由契约与 V23 持久化；不扩展 AI Analysis，不调用 Provider，不修改 Mastery Algorithm。
+- 快照固定 `schemaVersion=1`、`generationVersion=1.0`，在 REPEATABLE READ 只读事务中采集学生、成绩、掌握度、错题、学习与成长事件，随后在事务外渲染。导出只使用已持久化快照，支持 UTF-8 Markdown/JSON。
+- Swagger CLI 校验通过；Redocly errors 0、warnings 0；OpenAPI Generator 7.10.0 JAR validate、Java client、TypeScript Fetch 和 Maven Spring generation 均通过。Generator validate 仅有 7 个既有未使用模型建议。
+- Java 抽查确认 GrowthReport 的 `id/studentId/sourceReportId` 为 `String`、`snapshotSchemaVersion` 为 `Integer`；TypeScript 对应 ID 为 `string`、版本为 `number`。
+- Flyway 数据库基线升级到 V23；业务表仍为 47，`system_config` 仍为 31。V22 旧数据升级与空库 V1-V23 均通过，两份 V23 SHA-256 均为 `BCB19EE4282C93185C5AE87114CACADDFF830F976A5CB35DAA4636F0FF5CA5F6`。
+- Stage12F 完成全部 6 个 Growth Report operation；Controller 实现操作数为 116，剩余默认 501 为 0。
+- `mvnw.cmd dependency:tree`、`clean test` 与 `clean package` 均通过；测试结果为 414 tests、0 failures、0 errors、0 skipped。Testcontainers MySQL 8 从空库执行 V1-V23 成功，Spring Boot 可执行 JAR 打包成功。

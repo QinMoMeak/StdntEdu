@@ -559,3 +559,17 @@ OpenAPI V3.13.0 是 Stage12E 完成后的 Backup / Restore 契约基线。数据
 6. Backup 与 Restore 共用单线程有界 executor、数据库命名锁、DB CAS 与有限批次周期 rescan；executor 拒绝时任务保留 PENDING。Local V1 同时只执行一个 Backup/Restore 重任务。
 
 ZIP Verify/Restore 复用共享安全组件，拒绝 traversal、绝对/盘符/UNC 路径、symlink、重复条目、超限条目/总解压大小/压缩比及未声明 payload。所有下载文件名由服务端生成，不返回持久存储绝对路径。
+
+## V3.14.0 与 Flyway V23 Growth Report 基线
+
+OpenAPI V3.14.0 是 Stage12F 完成后的成长报告契约基线。数据库基线升级为 Flyway V23；V1-V22 继续冻结。V23 只补齐 `growth_report` 的规范请求、再生成链、快照版本、进度、取消、错误和生命周期字段及约束，不新增业务表或系统配置；业务表仍为 47，`system_config` 仍为 31。
+
+1. Local V1 的 Growth Report 正式语义为 `DETERMINISTIC`。报告不调用 AI Provider，不创建或修改 `ai_analysis`；成绩、掌握度、错题、复习、学习与成长事件均来自数据库确定性快照。Mastery Algorithm 仍为 V1.0，报告只读 `student_mastery`，不重算或回写掌握度。
+2. 报告类型固定为 `DAILY/WEEKLY/MONTHLY/TERM/YEARLY/CUSTOM`。请求日期为 Asia/Shanghai 业务日期的包含边界，内部时间查询统一转换为 `[start day 00:00, nextDay(end) 00:00)`；不允许未来结束日期。最大跨度依次为 1、7、31、366、366、366 天。
+3. 创建时持久化 canonical request 并写入 PENDING，事务提交后才 dispatch。独立单线程有界 executor、PENDING CAS claim、固定批次周期 rescan 和启动恢复共同保证任务可恢复；executor 拒绝时任务保持 PENDING，RUNNING 在重启后安全重置为 PENDING。
+4. 快照在单个 MySQL REPEATABLE READ 只读事务中构建，固定包含 `schemaVersion=1`、`generationVersion=1.0`、学生、成绩、掌握度、错题、学习、成长事件与透明规则建议。数据库事务结束后才渲染 Markdown，并在短事务中以状态 CAS 写入 SUCCESS；失败只保存稳定错误码与安全消息，不持久化半成品。
+5. 状态机为 `PENDING -> RUNNING|CANCELLED`、`RUNNING -> SUCCESS|FAILED|CANCELLED`。RUNNING 取消设置持久 cancel flag，Worker 落库前再次检查；终态不能被迟到结果覆盖。
+6. regenerate 不覆盖旧报告，而是创建带 `source_report_id` 的新 PENDING 记录；源报告及其快照保持不可变，同一源报告同时只允许一个活动子任务。
+7. Get/List 只读取持久报告，List 按 `create_time DESC, id DESC` 稳定分页。Export 只读取已持久化 SUCCESS 快照或 Markdown，不重新查询业务数据；V1 支持 UTF-8 `MARKDOWN` 和 `JSON`，附件导出及 PDF 不在本契约内。
+
+Swagger、Redocly、Generator validate、Java、TypeScript Fetch 和 Maven Spring generation 均通过；`clean test` 与 `clean package` 均以 414 tests、0 failures、0 errors、0 skipped 通过。Testcontainers MySQL 8 最终版本为 v23。

@@ -37,7 +37,7 @@ import org.springframework.stereotype.Service;
 public class BackupArchiveService {
     public static final String FORMAT = "STDNTEDU_BACKUP_V1";
     public static final int SCHEMA_VERSION = 1;
-    public static final String OPENAPI_VERSION = "3.13.0";
+    public static final String OPENAPI_VERSION = "3.14.0";
     public static final String COMPRESSION = "ZIP_DEFLATE";
     private static final String MANIFEST = "backup-manifest.json";
     private static final long MAX_ARCHIVE_BYTES = 10L * 1024 * 1024 * 1024;
@@ -198,7 +198,9 @@ public class BackupArchiveService {
         int databaseVersion;
         try { databaseVersion = Integer.parseInt(manifest.databaseVersion()); }
         catch (RuntimeException ex) { throw new IllegalStateException("backup database version is invalid"); }
-        if (databaseVersion > 22) throw new IllegalStateException("backup database version is newer than supported");
+        if (databaseVersion > Integer.parseInt(data.currentDatabaseVersion())) {
+            throw new IllegalStateException("backup database version is newer than supported");
+        }
         if (!COMPRESSION.equals(manifest.compression()) || manifest.encryption()) {
             throw new IllegalStateException("backup compression or encryption is not supported");
         }

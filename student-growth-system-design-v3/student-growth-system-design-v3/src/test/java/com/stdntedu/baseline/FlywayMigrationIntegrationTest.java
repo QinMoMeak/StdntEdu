@@ -339,17 +339,20 @@ class FlywayMigrationIntegrationTest {
             v1ToV21Checksums = appliedChecksums(v21Flyway, 21);
         }
 
-        Flyway flyway = Flyway.configure()
+        Flyway v22Flyway = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration")
+                .target(MigrationVersion.fromVersion("22"))
                 .load();
-        flyway.migrate();
+        v22Flyway.migrate();
+
+        List<String> schemaBeforeV23;
+        Map<String, Integer> v1ToV22Checksums;
 
         try (Connection connection = DriverManager.getConnection(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
-            assertExecutedVersions(flyway);
-            assertEquals("22", flyway.info().current().getVersion().toString());
-            assertEquals(v1ToV21Checksums, appliedChecksums(flyway, 21));
+            assertEquals("22", v22Flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV21Checksums, appliedChecksums(v22Flyway, 21));
             assertEquals(47, countBusinessTables(connection));
             assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
             assertEquals(schemaBeforeV22, schemaSignatureWithoutBackupRestore(connection));
@@ -365,6 +368,43 @@ class FlywayMigrationIntegrationTest {
                       AND error_code='LEGACY_RESTORE_INTERRUPTED'
                     """));
             assertV22MigrationCopiesAndHashesMatch();
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate("INSERT INTO student(id,student_code,name) VALUES(900023,'V23-LEGACY','V23 Legacy Student')");
+                statement.executeUpdate("""
+                        INSERT INTO growth_report(id,student_id,report_type,title,start_date,end_date,
+                            generation_type,status,statistics_snapshot_json,content_markdown)
+                        VALUES(900023,900023,'MONTHLY','Legacy report','2026-07-01','2026-07-31',
+                            'MANUAL','SUCCESS',JSON_OBJECT('legacy',true),'# Legacy')
+                        """);
+            }
+            schemaBeforeV23 = schemaSignatureWithoutGrowthReport(connection);
+            v1ToV22Checksums = appliedChecksums(v22Flyway, 22);
+        }
+
+        Flyway flyway = Flyway.configure()
+                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .locations("classpath:db/migration")
+                .load();
+        flyway.migrate();
+
+        try (Connection connection = DriverManager.getConnection(
+                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())) {
+            assertExecutedVersions(flyway);
+            assertEquals("23", flyway.info().current().getVersion().toString());
+            assertEquals(v1ToV22Checksums, appliedChecksums(flyway, 22));
+            assertEquals(47, countBusinessTables(connection));
+            assertEquals(31, queryInt(connection, "SELECT COUNT(*) FROM system_config"));
+            assertEquals(schemaBeforeV23, schemaSignatureWithoutGrowthReport(connection));
+            assertGrowthReportV23Definition(connection);
+            assertEquals(1, queryInt(connection, """
+                    SELECT COUNT(*) FROM growth_report
+                     WHERE id=900023 AND student_id=900023 AND generation_type='DETERMINISTIC'
+                       AND status='SUCCESS' AND progress_percent=100
+                       AND snapshot_schema_version=1 AND generation_version='1.0'
+                       AND request_json IS NOT NULL AND start_time IS NOT NULL AND finish_time IS NOT NULL
+                       AND JSON_UNQUOTE(JSON_EXTRACT(request_json,'$.studentId'))='900023'
+                    """));
+            assertV23MigrationCopiesAndHashesMatch();
         }
     }
 
@@ -834,7 +874,7 @@ class FlywayMigrationIntegrationTest {
                 .toList();
 
         assertEquals(
-                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"),
+                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23"),
                 versions);
     }
 
@@ -1026,6 +1066,46 @@ class FlywayMigrationIntegrationTest {
                   AND table_name NOT IN ('backup_record', 'restore_record')
                 ORDER BY table_name, ordinal_position
                 """);
+    }
+
+    private List<String> schemaSignatureWithoutGrowthReport(Connection connection) throws SQLException {
+        return queryStrings(connection, """
+                SELECT CONCAT_WS('|', table_name, column_name, ordinal_position, column_type,
+                                  is_nullable, COALESCE(column_default, '<NULL>'), column_key, extra)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name <> 'flyway_schema_history'
+                  AND table_name <> 'growth_report'
+                ORDER BY table_name, ordinal_position
+                """);
+    }
+
+    private void assertGrowthReportV23Definition(Connection connection) throws Exception {
+        for (String column : List.of("request_json", "source_report_id", "snapshot_schema_version",
+                "generation_version", "progress_percent", "cancel_requested", "error_code", "error_message",
+                "start_time", "finish_time")) {
+            assertEquals(1, queryInt(connection, """
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_schema=DATABASE() AND table_name='growth_report' AND column_name=?
+                    """, column));
+        }
+        assertEquals(List.of("json|NO|<NULL>"), columnDefinition(connection, "growth_report", "request_json"));
+        assertEquals(List.of("int|NO|1"), columnDefinition(connection, "growth_report", "snapshot_schema_version"));
+        assertEquals(List.of("varchar(32)|NO|1.0"), columnDefinition(connection, "growth_report", "generation_version"));
+        assertEquals(List.of("int|NO|0"), columnDefinition(connection, "growth_report", "progress_percent"));
+        assertConstraint(connection, "growth_report", "fk_gr_source_report", "FOREIGN KEY");
+        for (String constraint : List.of("chk_gr_report_type_v23", "chk_gr_generation_type_v23",
+                "chk_gr_snapshot_version_v23", "chk_gr_progress_v23", "chk_gr_lifecycle_v23")) {
+            assertConstraint(connection, "growth_report", constraint, "CHECK");
+        }
+        assertCheckContains(connection, "chk_gr_report_type_v23",
+                List.of("DAILY", "WEEKLY", "MONTHLY", "TERM", "YEARLY", "CUSTOM"));
+        assertCheckContains(connection, "chk_gr_generation_type_v23", List.of("DETERMINISTIC"));
+        String schema = Files.readString(Path.of("database", "schema-full.sql"));
+        for (String token : List.of("request_json JSON NOT NULL", "source_report_id BIGINT",
+                "generation_version VARCHAR(32) NOT NULL DEFAULT '1.0'", "chk_gr_lifecycle_v23")) {
+            assertTrue(schema.contains(token));
+        }
     }
 
     private void assertBackupRestoreV22Definition(Connection connection) throws Exception {
@@ -1736,6 +1816,14 @@ class FlywayMigrationIntegrationTest {
         Path design = Path.of("database", "flyway", "V22__complete_backup_restore_lifecycle.sql");
         Path runtime = Path.of("src", "main", "resources", "db", "migration",
                 "V22__complete_backup_restore_lifecycle.sql");
+        assertArrayEquals(Files.readAllBytes(design), Files.readAllBytes(runtime));
+        assertEquals(sha256(design), sha256(runtime));
+    }
+
+    private void assertV23MigrationCopiesAndHashesMatch() throws Exception {
+        Path design = Path.of("database", "flyway", "V23__complete_growth_report_lifecycle.sql");
+        Path runtime = Path.of("src", "main", "resources", "db", "migration",
+                "V23__complete_growth_report_lifecycle.sql");
         assertArrayEquals(Files.readAllBytes(design), Files.readAllBytes(runtime));
         assertEquals(sha256(design), sha256(runtime));
     }

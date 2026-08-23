@@ -112,7 +112,7 @@ class StageTwelveEBackupRestoreIntegrationTest {
         mvc.perform(get("/api/v1/backups/{id}", backupId)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(backupId))
                 .andExpect(jsonPath("$.data.format").value("STDNTEDU_BACKUP_V1"))
-                .andExpect(jsonPath("$.data.databaseVersion").value("22"))
+                .andExpect(jsonPath("$.data.databaseVersion").value("23"))
                 .andExpect(jsonPath("$.data.attachmentCount").value(1));
         mvc.perform(post("/api/v1/backups/{id}/verify", backupId)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.valid").value(true))
@@ -130,7 +130,7 @@ class StageTwelveEBackupRestoreIntegrationTest {
         JsonNode manifest = manifest(stored);
         assertThat(manifest.path("format").asText()).isEqualTo("STDNTEDU_BACKUP_V1");
         assertThat(manifest.path("schemaVersion").asInt()).isEqualTo(1);
-        assertThat(manifest.path("openapiVersion").asText()).isEqualTo("3.13.0");
+        assertThat(manifest.path("openapiVersion").asText()).isEqualTo("3.14.0");
         assertThat(manifest.path("timezone").asText()).isEqualTo("Asia/Shanghai");
         assertThat(manifest.path("datasets").toString()).doesNotContain("backup_record", "restore_record",
                 "import_task", "export_task", "system_config", "flyway_schema_history");
@@ -184,7 +184,7 @@ class StageTwelveEBackupRestoreIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT sha256 FROM attachment WHERE id=?", String.class, attachmentId))
                 .isEqualTo(sha256(restoredAttachment));
         assertThat(jdbc.queryForObject("SELECT version FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("22");
+                String.class)).isEqualTo("23");
         long next = insertStudent("After restore");
         assertThat(next).isGreaterThan(originalId);
         mvc.perform(get("/api/v1/restores/{id}", restoreId)).andExpect(status().isOk())

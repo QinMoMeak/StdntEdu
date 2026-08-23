@@ -521,7 +521,7 @@ class StageTenDAiStudyPlanGenerationIntegrationTest {
     @Test
     void scenarios85_103_frozenBaselineGeneratorAndDatabaseRemainIntact() {
         assertThat(jdbc.queryForObject("SELECT version FROM flyway_schema_history WHERE success=1 ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("22");
+                String.class)).isEqualTo("23");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name<>'flyway_schema_history'",
                 Integer.class)).isEqualTo(47);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM system_config", Integer.class)).isEqualTo(31);

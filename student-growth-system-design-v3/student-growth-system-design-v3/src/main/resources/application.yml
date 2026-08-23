@@ -50,3 +50,10 @@ app:
       batch-size: 20
       fixed-delay-ms: 30000
       initial-delay-ms: 30000
+  growth-report:
+    executor:
+      queue-capacity: 20
+    pending-rescan:
+      batch-size: 50
+      fixed-delay-ms: 30000
+      initial-delay-ms: 30000

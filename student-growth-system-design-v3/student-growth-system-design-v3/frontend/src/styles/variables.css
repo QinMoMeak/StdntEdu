@@ -1,0 +1,17 @@
+:root {
+  color-scheme: light;
+  --sidebar-width: clamp(214px, 18vw, 248px);
+  --header-height: 72px;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f3f5f7;
+  --color-border: #dfe4e8;
+  --color-text: #1d2732;
+  --color-text-muted: #687684;
+  --color-success: #2f9d70;
+  --color-warning: #d49b32;
+  --color-danger: #d95c5c;
+  font-family:
+    Inter, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}

@@ -1,8 +1,7 @@
-import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
-import App from '@/App.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
+import ScoreView from '@/views/ScoreView.vue'
 import { createTestRouter } from './index'
 
 describe('application router', () => {
@@ -13,12 +12,11 @@ describe('application router', () => {
     expect(router.currentRoute.value.path).toBe('/dashboard')
   })
 
-  it('mounts the router through App', async () => {
+  it('mounts the real score page instead of a placeholder', async () => {
     const router = createTestRouter()
     await router.push('/scores')
     await router.isReady()
-    const wrapper = mount(App, { global: { plugins: [router], stubs: { AppShell: { template: '<router-view />' } } } })
-    expect(wrapper.text()).toContain('成绩')
+    expect(router.currentRoute.value.matched.at(-1)?.components?.default).toBe(ScoreView)
   })
 
   it('allows direct navigation without an auth guard', async () => {
@@ -32,7 +30,7 @@ describe('application router', () => {
     const router = createTestRouter()
     const components = router
       .getRoutes()
-      .filter((route) => !['/', '/dashboard', '/students'].includes(route.path) && route.redirect == null)
+      .filter((route) => !['/', '/dashboard', '/students', '/scores'].includes(route.path) && route.redirect == null)
       .map((route) => route.components?.default)
     expect(components.every((component) => component === PlaceholderView)).toBe(true)
   })

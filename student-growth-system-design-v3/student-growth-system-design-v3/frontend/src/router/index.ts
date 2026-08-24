@@ -1,7 +1,9 @@
 import { createMemoryHistory, createRouter, createWebHistory, type RouterHistory, type RouteRecordRaw } from 'vue-router'
 
 import AppShell from '@/layout/AppShell.vue'
+import DashboardView from '@/views/DashboardView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
+import StudentView from '@/views/StudentView.vue'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -10,8 +12,6 @@ declare module 'vue-router' {
 }
 
 const placeholderRoutes: RouteRecordRaw[] = [
-  { path: 'dashboard', component: PlaceholderView, meta: { title: '首页' } },
-  { path: 'students', component: PlaceholderView, meta: { title: '学生档案' } },
   { path: 'scores', component: PlaceholderView, meta: { title: '成绩' } },
   { path: 'wrong-questions', component: PlaceholderView, meta: { title: '错题' } },
   { path: 'mastery', component: PlaceholderView, meta: { title: '掌握度' } },
@@ -35,7 +35,12 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         path: '/',
         component: AppShell,
         meta: { title: '首页' },
-        children: [{ path: '', redirect: '/dashboard' }, ...placeholderRoutes],
+        children: [
+          { path: '', redirect: '/dashboard' },
+          { path: 'dashboard', component: DashboardView, meta: { title: '学习概览' } },
+          { path: 'students', component: StudentView, meta: { title: '学生档案' } },
+          ...placeholderRoutes,
+        ],
       },
     ],
   })

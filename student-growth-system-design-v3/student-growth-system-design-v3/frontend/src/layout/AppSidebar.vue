@@ -16,6 +16,7 @@ import {
   Tickets,
   TrendCharts,
   UploadFilled,
+  User,
   Warning,
 } from '@element-plus/icons-vue'
 
@@ -32,7 +33,13 @@ interface NavigationGroup {
 
 const route = useRoute()
 const groups: NavigationGroup[] = [
-  { label: '', items: [{ label: '首页', path: '/dashboard', icon: House }] },
+  {
+    label: '',
+    items: [
+      { label: '首页', path: '/dashboard', icon: House },
+      { label: '学生档案', path: '/students', icon: User },
+    ],
+  },
   {
     label: '学习数据',
     items: [

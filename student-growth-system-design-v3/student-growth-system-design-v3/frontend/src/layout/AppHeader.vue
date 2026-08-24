@@ -11,7 +11,7 @@ const route = useRoute()
 const appStore = useAppStore()
 const studentStore = useStudentContextStore()
 const { backendStatus } = storeToRefs(appStore)
-const { currentStudentId } = storeToRefs(studentStore)
+const { currentStudentId, students, loading } = storeToRefs(studentStore)
 
 const pageTitle = computed(() => route.meta.title)
 const statusText = computed(() => {
@@ -20,6 +20,10 @@ const statusText = computed(() => {
   if (backendStatus.value === 'unavailable') return '后端不可用'
   return '尚未检查后端'
 })
+
+function changeStudent(studentId?: string): void {
+  studentStore.selectStudent(students.value.find((student) => student.id === studentId) ?? null)
+}
 </script>
 
 <template>
@@ -31,10 +35,18 @@ const statusText = computed(() => {
     <div class="header-actions">
       <div class="student-context">
         <el-icon><User /></el-icon>
-        <span>
-          <small>当前学生</small>
-          <strong>{{ currentStudentId ? `ID ${currentStudentId}` : '未选择' }}</strong>
-        </span>
+        <label for="current-student">当前学生</label>
+        <el-select
+          id="current-student"
+          :model-value="currentStudentId ?? ''"
+          :loading="loading"
+          clearable
+          placeholder="请选择学生"
+          aria-label="当前学生"
+          @change="changeStudent"
+        >
+          <el-option v-for="student in students" :key="student.id" :label="student.name" :value="student.id" />
+        </el-select>
       </div>
       <div class="backend-state" :data-status="backendStatus">
         <span class="status-dot" aria-hidden="true" />
@@ -94,18 +106,12 @@ h1 {
   color: var(--color-text-muted);
 }
 
-.student-context > span {
-  display: grid;
-}
-
-.student-context small {
+.student-context label {
   font-size: 11px;
 }
 
-.student-context strong {
-  color: var(--color-text);
-  font-size: 13px;
-  font-weight: 600;
+.student-context .el-select {
+  width: 156px;
 }
 
 .backend-state {
@@ -140,7 +146,7 @@ h1 {
 
 @media (max-width: 1000px) {
   .header-context,
-  .student-context small {
+  .student-context label {
     display: none;
   }
 

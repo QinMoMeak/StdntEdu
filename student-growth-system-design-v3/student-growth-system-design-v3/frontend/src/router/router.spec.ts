@@ -6,7 +6,7 @@ import PlaceholderView from '@/views/PlaceholderView.vue'
 import { createTestRouter } from './index'
 
 describe('application router', () => {
-  it('redirects the default route to the Dashboard placeholder', async () => {
+  it('redirects the default route to the real Dashboard', async () => {
     const router = createTestRouter()
     await router.push('/')
     await router.isReady()
@@ -30,7 +30,10 @@ describe('application router', () => {
 
   it('uses one PlaceholderView for unfinished routes', () => {
     const router = createTestRouter()
-    const components = router.getRoutes().filter((route) => route.path !== '/' && route.redirect == null).map((route) => route.components?.default)
+    const components = router
+      .getRoutes()
+      .filter((route) => !['/', '/dashboard', '/students'].includes(route.path) && route.redirect == null)
+      .map((route) => route.components?.default)
     expect(components.every((component) => component === PlaceholderView)).toBe(true)
   })
 })

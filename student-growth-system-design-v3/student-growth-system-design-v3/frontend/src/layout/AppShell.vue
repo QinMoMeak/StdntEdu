@@ -3,10 +3,16 @@ import { onMounted } from 'vue'
 
 import AppHeader from './AppHeader.vue'
 import AppSidebar from './AppSidebar.vue'
+import { handleApiError } from '@/api/notifications'
 import { useAppStore } from '@/stores/app'
+import { useStudentContextStore } from '@/stores/studentContext'
 
 const appStore = useAppStore()
-onMounted(() => appStore.checkBackend())
+const studentStore = useStudentContextStore()
+onMounted(() => {
+  appStore.checkBackend()
+  studentStore.initialize().catch(handleApiError)
+})
 </script>
 
 <template>

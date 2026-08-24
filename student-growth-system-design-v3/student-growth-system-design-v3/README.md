@@ -1,6 +1,6 @@
 # 学生个人教育成长档案系统 Backend Local V1
 
-当前后端公开契约基线为 OpenAPI V3.15.0，Flyway 数据库基线为 V23。116 个公开 operationId 均已实现。
+当前后端公开契约基线为 OpenAPI V3.15.1，Flyway 数据库基线为 V23。116 个公开 operationId 均已实现。
 
 Local V1 是仅绑定 `127.0.0.1` 的个人单用户应用，不提供登录或应用层认证。Docker Compose 只提供带持久卷的本地 MySQL；数据库结构和初始化数据只由 Flyway V1-V23 管理。
 

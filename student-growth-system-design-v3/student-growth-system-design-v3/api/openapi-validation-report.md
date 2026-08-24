@@ -1,4 +1,25 @@
-# OpenAPI V3.15.0 验证报告
+# OpenAPI V3.15.1 验证报告
+
+## V3.15.1 WrongQuestion QuestionType Contract Closure
+
+本节是当前权威验证结果；后续 V3.1.0-V3.15.0 小节仅保留历史记录。
+
+- 规范版本：OpenAPI 3.1.0，`info.version=3.15.1`；文件 819 行，paths 86、operations 116、
+  schemas 167、responses 68、parameters 21，operationId 116/116/0。
+- `WrongCreate` 新增可选、可空 `questionType`；`WrongUpdate` 与 `Wrong` 通过既有 `allOf` 继承该字段。
+  该值是动态字典 `question_type` 的 `item_code`，所有数据库 BIGINT ID 类型保持不变。
+- Swagger CLI validate 通过；Redocly recommended lint errors 0、warnings 0；OpenAPI Generator
+  7.10.0 JAR validate 通过，仅保留 7 个既有未使用模型建议。
+- Java model、TypeScript Fetch、Maven Spring generation 和前端生成客户端一致性检查全部通过。
+  Java 的三个 WrongQuestion 模型均生成 `String questionType`；TypeScript 均生成
+  `questionType?: string | null`。
+- 写入时接受空值；非空值必须是当前启用的 `question_type` 字典项。读取历史数据不重新校验字典启用状态，
+  因此字典项禁用后历史记录仍可读。PUT 允许显式 `null` 清空字段。
+- 普通 CRUD、AI Extraction confirm、JSON Import 与 Export 已统一走该语义；Backup/Restore 的表级
+  元数据机制原本已覆盖 `wrong_question.question_type`，无需变更备份格式。
+- `mvnw.cmd clean test`、`clean package` 和第二次 `test` 均以 424/0/0/0 通过；前端 82/0/0/0，
+  lint、typecheck 与生产构建通过。Testcontainers MySQL 8 从空库执行 V1-V23 成功，最终 v23。
+- 数据库、`schema-full.sql` 与 Flyway V1-V23 均未修改，不新增 V24；本次是新增可选字段的向后兼容修订。
 
 ## V3.15.0 Backend Local V1 Release Closure
 

@@ -1,8 +1,22 @@
-# OpenAPI V3.15.0 冻结说明
+# OpenAPI V3.15.1 冻结说明
+
+## V3.15.1 WrongQuestion QuestionType 契约闭环
+
+OpenAPI V3.15.1 是 Frontend F4 使用的新契约基线。它只为 `WrongCreate` 增加可选、可空的
+`questionType`，`WrongUpdate` 与 `Wrong` 通过既有继承结构获得同一字段；路径、operationId、已有字段类型、
+数据库和 Flyway 均不变，因此属于向后兼容修订。
+
+`questionType` 保存动态字典 `question_type` 的 `item_code`。创建、更新、AI Extraction confirm 和导入的
+非空值必须是当前启用项；空值继续合法，字典项禁用后历史记录仍可查询。PUT 显式传入 `null` 表示清空。
+JSON 导入继续兼容不含该字段的旧数据，导出保留空值或有效 code；Backup/Restore 继续使用既有表级元数据机制，
+无需修改备份格式。
+
+数据库基线仍为 Flyway V23，`wrong_question.question_type VARCHAR(32) NULL` 的既有结构已足够表达契约，
+不新增 V24，不修改 `schema-full.sql`。Mastery Algorithm 仍为 V1.0。
 
 ## 当前 Backend Local V1 基线
 
-OpenAPI V3.15.0 是前端开发使用的 Backend Local V1 正式契约基线。数据库基线为 Flyway V23，
+OpenAPI V3.15.1 是前端开发使用的 Backend Local V1 正式契约基线。数据库基线为 Flyway V23，
 Mastery Algorithm 保持 V1.0；86 个路径模板和 116 个 operationId 均已实现。
 
 Local V1 是绑定 `127.0.0.1` 的个人单用户应用，不提供登录、JWT、RBAC 或其他应用层认证。
@@ -488,7 +502,7 @@ V3.1.1 是阶段四考试与成绩模块的新契约基线，在 V3.1 的基础�
 
 ## 当前冻结规则
 
-OpenAPI V3.15.0 是 Backend Local V1 契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构、持久化映射、加密规则、视觉输入转换或计算公式。
+OpenAPI V3.15.1 是 Backend Local V1 契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构、持久化映射、加密规则、视觉输入转换或计算公式。
 
 本冻结包括统一响应模型、分页模型、错误模型、Local V1 匿名访问边界、文件上传下载约束、异步任务模型以及核心枚举。所有数据库 BIGINT ID 通过 API 返回 `string`。
 
@@ -514,9 +528,9 @@ Local V1 不提供应用层认证，OpenAPI 使用根级 `security: []` 且不�
 
 ## 验证记录
 
-V3.15.0 的 Swagger CLI、Redocly 和 OpenAPI Generator validate 均通过；Java 模型、TypeScript Fetch
+V3.15.1 的 Swagger CLI、Redocly 和 OpenAPI Generator validate 均通过；Java 模型、TypeScript Fetch
 与 Spring 接口生成通过。`mvnw.cmd clean test`、`clean package` 和第二次 `test` 均以
-419/0/0/0 通过，Flyway V1-V23、47 张业务表和 31 项 `system_config` 保持不变。详细统计见
+424/0/0/0 通过，Flyway V1-V23、47 张业务表和 31 项 `system_config` 保持不变。详细统计见
 `api/openapi-validation-report.md`。
 
 ## V3.12.0 与 Flyway V21 基线

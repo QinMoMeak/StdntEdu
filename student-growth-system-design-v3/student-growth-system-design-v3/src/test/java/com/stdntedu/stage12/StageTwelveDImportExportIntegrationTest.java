@@ -71,6 +71,9 @@ class StageTwelveDImportExportIntegrationTest {
         jdbc.update("DELETE FROM import_task");
         jdbc.update("DELETE FROM export_task");
         jdbc.update("DELETE FROM attachment WHERE id NOT IN (SELECT attachment_id FROM ai_extraction_file)");
+        jdbc.update("DELETE FROM wrong_question_knowledge");
+        jdbc.update("DELETE FROM wrong_review");
+        jdbc.update("DELETE FROM wrong_question");
         jdbc.update("DELETE FROM academic_term");
         jdbc.update("DELETE FROM student WHERE student_code LIKE 'S12D-%' OR name LIKE 'Stage12D%' OR name LIKE 'Imported%' OR name LIKE '=cmd%'");
         deleteTree(STORAGE_ROOT);
@@ -259,6 +262,39 @@ class StageTwelveDImportExportIntegrationTest {
                 .isIn("PENDING", "RUNNING", "FAILED");
     }
 
+    @Test
+    void wrongQuestionImportRemainsBackwardCompatibleValidatesQuestionTypeAndExportsIt() throws Exception {
+        long subjectId = jdbc.queryForObject("SELECT id FROM subject WHERE enabled=1 ORDER BY id LIMIT 1", Long.class);
+        String legacy = createWrongQuestionImport(subjectId, "legacy type", null);
+        await("import_task", legacy, "PREVIEW_READY");
+        confirm(legacy, "stage12d-wrong-legacy");
+        await("import_task", legacy, "SUCCESS");
+        assertThat(jdbc.queryForObject("SELECT question_type FROM wrong_question WHERE question_text='legacy type'",
+                String.class)).isNull();
+
+        String typed = createWrongQuestionImport(subjectId, "typed import", "SHORT_ANSWER");
+        await("import_task", typed, "PREVIEW_READY");
+        confirm(typed, "stage12d-wrong-typed");
+        await("import_task", typed, "SUCCESS");
+        assertThat(jdbc.queryForObject("SELECT question_type FROM wrong_question WHERE question_text='typed import'",
+                String.class)).isEqualTo("SHORT_ANSWER");
+
+        String invalid = createWrongQuestionImport(subjectId, "invalid type", "NOT_A_QUESTION_TYPE");
+        await("import_task", invalid, "PREVIEW_READY");
+        confirm(invalid, "stage12d-wrong-invalid");
+        await("import_task", invalid, "FAILED");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM wrong_question WHERE question_text='invalid type'",
+                Integer.class)).isZero();
+
+        String export = createExport("JSON", "[\"WRONG_QUESTION\"]", studentId);
+        await("export_task", export, "SUCCESS");
+        JsonNode document = json.readTree(mvc.perform(get("/api/v1/exports/{id}/download", export))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+        assertThat(document.path("WRONG_QUESTION").get(0).path("questionType").isNull()).isTrue();
+        assertThat(document.path("WRONG_QUESTION").get(1).path("questionType").asText())
+                .isEqualTo("SHORT_ANSWER");
+    }
+
     private String createStudentImport(String name) throws Exception {
         return createImport("[{\"name\":\"" + name + "\",\"currentStageId\":\"" + stageId
                 + "\",\"currentGradeId\":\"" + gradeId + "\"}]");
@@ -270,6 +306,24 @@ class StageTwelveDImportExportIntegrationTest {
         String response = mvc.perform(multipart("/api/v1/imports").file(file).param("importType", "STUDENT"))
                 .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
         return json.readTree(response).path("data").path("taskId").asText();
+    }
+
+    private String createWrongQuestionImport(long subjectId, String text, String questionType) throws Exception {
+        String type = questionType == null ? "" : ",\"questionType\":\"" + questionType + "\"";
+        String payload = "[{\"studentId\":\"" + studentId + "\",\"subjectId\":\"" + subjectId
+                + "\",\"sourceType\":\"PRACTICE\",\"questionText\":\"" + text + "\"" + type + "}]";
+        MockMultipartFile file = new MockMultipartFile("file", "wrong-questions.json", "application/json",
+                payload.getBytes(StandardCharsets.UTF_8));
+        String response = mvc.perform(multipart("/api/v1/imports").file(file)
+                        .param("importType", "WRONG_QUESTION").param("studentId", Long.toString(studentId)))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        return json.readTree(response).path("data").path("taskId").asText();
+    }
+
+    private void confirm(String taskId, String key) throws Exception {
+        mvc.perform(post("/api/v1/imports/{id}/confirm", taskId).header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isAccepted());
     }
 
     private String createExport(String format, String types, long owner) throws Exception {

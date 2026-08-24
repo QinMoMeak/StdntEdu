@@ -354,10 +354,33 @@ class StageTenBAiExtractionIntegrationTest {
         assertThat(count("wrong_question")).isEqualTo(1);
         assertThat(count("wrong_question_knowledge")).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT source_type FROM wrong_question", String.class)).isEqualTo("PRACTICE");
+        assertThat(jdbc.queryForObject("SELECT question_type FROM wrong_question", String.class)).isEqualTo("SHORT_ANSWER");
         assertThat(jdbc.queryForObject("SELECT status FROM ai_extraction_question", String.class)).isEqualTo("SAVED");
         assertThat(count("wrong_review")).isZero();
         assertThat(count("student_mastery")).isZero();
         assertThat(count("mastery_history")).isZero();
+    }
+
+    @Test
+    void scenarioAiConfirmationAllowsMissingQuestionType() throws Exception {
+        AiTask task = create(model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "nullable-type"));
+        AiConfirmItem item = confirmItem(questionId(task), Long.toString(knowledgeId), "unclassified").questionType(null);
+        confirmations.confirm(task.getTaskId(), "nullable-type-key-01", new AiConfirm(true, List.of(item)));
+        assertThat(jdbc.queryForObject("SELECT question_type FROM wrong_question", String.class)).isNull();
+    }
+
+    @Test
+    void scenarioAiConfirmationRejectsUnknownQuestionTypeWithoutCreatingDictionaryItem() throws Exception {
+        AiTask task = create(model("OPENAI_COMPATIBLE", "MULTIMODAL", true, "invalid-type"));
+        int dictionaryItems = count("dict_item");
+        AiConfirmItem item = confirmItem(questionId(task), Long.toString(knowledgeId), "invalid type")
+                .questionType("AI_INVENTED_TYPE");
+        assertThatThrownBy(() -> confirmations.confirm(task.getTaskId(), "invalid-type-key-01",
+                new AiConfirm(true, List.of(item))))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY));
+        assertThat(count("wrong_question")).isZero();
+        assertThat(count("dict_item")).isEqualTo(dictionaryItems);
     }
 
     @Test

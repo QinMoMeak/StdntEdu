@@ -1,4 +1,22 @@
-# OpenAPI V3.11.0 冻结说明
+# OpenAPI V3.15.0 冻结说明
+
+## 当前 Backend Local V1 基线
+
+OpenAPI V3.15.0 是前端开发使用的 Backend Local V1 正式契约基线。数据库基线为 Flyway V23，
+Mastery Algorithm 保持 V1.0；86 个路径模板和 116 个 operationId 均已实现。
+
+Local V1 是绑定 `127.0.0.1` 的个人单用户应用，不提供登录、JWT、RBAC 或其他应用层认证。
+OpenAPI 根级 `security: []` 明确全部操作匿名，`securitySchemes` 不包含 Bearer JWT；此前仅由虚拟
+JWT 设计产生的 401/403 响应已移除。未来若引入多用户认证，必须先进行新的 OpenAPI 大版本审查。
+
+Flyway V1-V23 是数据库结构和初始化数据的唯一执行权威。Docker Compose 只提供 loopback MySQL
+辅助环境和 `mysql_data` 持久卷，不执行 `schema-full.sql` 或其他 init SQL；应用持久文件根由
+`STDNTEDU_DATA_DIR` 配置。项目 Maven 版本继续保留 `0.1.0-SNAPSHOT`，不把契约版本等同于制品版本。
+MySQL 8.4 空库已由打包 JAR 实测迁移到 v23 并健康启动；Flyway 对 8.4 的版本支持提示作为 P3
+保留，不在本次发布收口中变更数据库大版本。
+
+V3.15.0 移除了先前声明但从未实现的应用层认证要求，属于 Local V1 发布边界修订，不是 patch。
+以下 V3.1.0-V3.14.0 章节仅保留为历史修订记录，不代表当前安全、数据库或发布基线。
 
 ## V3.11.0 Growth Event 成长事件契约闭环
 
@@ -468,11 +486,11 @@ V3.1.1 是阶段四考试与成绩模块的新契约基线，在 V3.1 的基础�
 
 这是一项向后兼容变更：没有删除路径、字段或 operationId，也没有修改既有字段类型和数据库/Flyway 基线。排名与知识点的跨字段约束由服务端校验：排名存在时必须给出对应人数且不得超过人数；知识点必须属于当前学科，且分数和正确题数不得超过各自总量。
 
-## 冻结结论
+## 当前冻结规则
 
-OpenAPI V3.10.0 是 Stage12B Attachment 实现后的新契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构、持久化映射、加密规则、视觉输入转换或计算公式。
+OpenAPI V3.15.0 是 Backend Local V1 契约基线。后续开发必须按 `api/openapi.yaml` 和掌握度算法 V1.0 实现，不得自行猜测字段、状态、响应结构、持久化映射、加密规则、视觉输入转换或计算公式。
 
-本冻结包括统一响应模型、分页模型、错误模型、安全定义、文件上传下载约束、异步任务模型以及核心枚举。所有数据库 BIGINT ID 通过 API 返回 `string`。核心枚举编码与数据库 V1 至 V13 的 CHECK 约束保持一致。
+本冻结包括统一响应模型、分页模型、错误模型、Local V1 匿名访问边界、文件上传下载约束、异步任务模型以及核心枚举。所有数据库 BIGINT ID 通过 API 返回 `string`。
 
 ## 开发规则
 
@@ -488,17 +506,18 @@ OpenAPI V3.10.0 是 Stage12B Attachment 实现后的新契约基线。后续开�
 
 ## 数据库边界
 
-数据库 V1 至 V20 已冻结，不得回写或重定义既有迁移的业务语义。Stage12B 不新增 V21；后续数据库变更必须使用新的迁移版本。
+数据库 V1 至 V23 已冻结，不得回写或重定义既有迁移的业务语义；后续数据库变更必须从 V24 开始。
 
 ## 安全边界
 
-契约已固定 `bearerAuth` 和 JWT Bearer 方案，但当前阶段不代表真实 JWT 鉴权已经实现。真实 JWT、前端、导入导出和备份恢复仍不属于本阶段实现内容。
+Local V1 不提供应用层认证，OpenAPI 使用根级 `security: []` 且不定义 `securitySchemes`。运行时继续仅依赖 `server.address=127.0.0.1` 的本机网络边界；不得把这一边界误用为多用户或远程部署安全模型。
 
 ## 验证记录
 
-本轮 `swagger-cli`、Redocly 和 OpenAPI Generator validate 均通过；Java 模型、TypeScript Fetch 与
-Spring 接口生成通过。`mvnw.cmd clean test` 和 `clean package` 均以 367/0/0/0 通过，Flyway
-V1-V20、47 张业务表和 31 项 system_config 保持不变。详细统计见 `api/openapi-validation-report.md`。
+V3.15.0 的 Swagger CLI、Redocly 和 OpenAPI Generator validate 均通过；Java 模型、TypeScript Fetch
+与 Spring 接口生成通过。`mvnw.cmd clean test`、`clean package` 和第二次 `test` 均以
+419/0/0/0 通过，Flyway V1-V23、47 张业务表和 31 项 `system_config` 保持不变。详细统计见
+`api/openapi-validation-report.md`。
 
 ## V3.12.0 与 Flyway V21 基线
 

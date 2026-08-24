@@ -1,4 +1,33 @@
-# OpenAPI V3.11.0 验证报告
+# OpenAPI V3.15.0 验证报告
+
+## V3.15.0 Backend Local V1 Release Closure
+
+本节是当前权威验证结果；后续 V3.1.0-V3.14.0 小节仅保留历史记录。
+
+- 规范版本：OpenAPI 3.1.0，`info.version=3.15.0`。
+- 自动结构统计：文件 819 行；paths 86、operations 116、schemas 167、responses 68、parameters 21。
+- operationId：116/116/0；path parameter 出现 77 次，缺口 0。
+- Local V1 安全：根级 `security: []`，security scheme 0；无 `bearerAuth`，无 JWT 全局要求，
+  无仅由旧认证设计产生的 401/403 响应。代表性 `/api/v1/stages` 在无 Authorization 时返回 200。
+- Swagger CLI validate：通过。Redocly recommended lint：errors 0、warnings 0。
+- OpenAPI Generator 7.10.0 JAR validate：通过；报告 7 个未使用模型建议，不属于解析或生成错误。
+- Java model、TypeScript Fetch、Spring interface generation：全部通过。TypeScript 业务 API 文件不引用
+  accessToken、Bearer 或 Authorization；生成器通用 `runtime.ts` 仍含未被业务 operation 使用的可选
+  OAuth `accessToken` 插槽。
+- 实现扫描：OpenAPI 116、Controller override 116、runtime reachable 501 0、placeholder 0、
+  duplicate operationId 0、PathVariable gap 0。
+- 回归：`mvnw.cmd clean test` 为 419/0/0/0（6分14.9秒），`clean package` 为
+  419/0/0/0（6分12.1秒），第二次 `test` 为 419/0/0/0（6分8.9秒）。
+- Testcontainers MySQL 8 从空库成功执行 V1-V23，最终 v23；业务表 47，`system_config` 31。
+- 独立 Docker Compose MySQL 8.4 空库也由打包 JAR 成功迁移到 v23，`/internal/health` 返回
+  `status=UP`、`database=UP`，实查业务表 47、`system_config` 31；验证容器、volume 和专用持久目录
+  已清理。Flyway 10.10.0 对 MySQL 8.4 给出超出其已测试到 8.1 的升级建议，但本基线实测兼容，
+  因此 Docker image 保持 8.4，该提示记录为 P3。
+- Docker Compose 展开后 MySQL `host_ip=127.0.0.1`，只保留 `mysql_data:/var/lib/mysql`，无
+  `/docker-entrypoint-initdb.d` 或 `schema-full.sql` 挂载。Flyway 是唯一 schema lifecycle 权威。
+- Stage13 新增 5 个 JUnit testcase：4 个 ZIP 规范化重复/不覆盖/正常输入场景，1 个匿名访问契约场景。
+- Maven 制品版本保留 `0.1.0-SNAPSHOT`。依赖树中的 commons-io/commons-codec 版本选择属于现有
+  Maven mediation；完整测试和打包无二进制不兼容，当前不升级。
 
 ## V3.11.0 Growth Event 契约与生成验证
 

@@ -6,12 +6,8 @@ services:
       MYSQL_DATABASE: student_growth
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    ports: ["${MYSQL_PORT}:3306"]
+    ports: ["127.0.0.1:${MYSQL_PORT:-3306}:3306"]
     volumes:
       - mysql_data:/var/lib/mysql
-      - ../database/schema-full.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ../database/init-basic.sql:/docker-entrypoint-initdb.d/02-basic.sql:ro
-      - ../database/init-dictionary.sql:/docker-entrypoint-initdb.d/03-dict.sql:ro
-      - ../database/init-algorithm-config.sql:/docker-entrypoint-initdb.d/04-config.sql:ro
 volumes:
   mysql_data:

@@ -37,7 +37,7 @@ import org.springframework.stereotype.Service;
 public class BackupArchiveService {
     public static final String FORMAT = "STDNTEDU_BACKUP_V1";
     public static final int SCHEMA_VERSION = 1;
-    public static final String OPENAPI_VERSION = "3.14.0";
+    public static final String OPENAPI_VERSION = "3.15.0";
     public static final String COMPRESSION = "ZIP_DEFLATE";
     private static final String MANIFEST = "backup-manifest.json";
     private static final long MAX_ARCHIVE_BYTES = 10L * 1024 * 1024 * 1024;
@@ -175,6 +175,7 @@ public class BackupArchiveService {
 
     private Map<String, ZipArchiveEntry> safeEntries(ZipFile zip) {
         Map<String, ZipArchiveEntry> result = new LinkedHashMap<>();
+        Set<String> names = new HashSet<>();
         long total = 0;
         var values = zip.getEntries();
         while (values.hasMoreElements()) {
@@ -182,9 +183,12 @@ public class BackupArchiveService {
             if (entry.isDirectory()) continue;
             if (result.size() >= MAX_ENTRIES) throw new IllegalStateException("backup ZIP exceeds entry limit");
             String name;
-            try { name = ZipArchiveSafety.safeEntryName(entry, MAX_ENTRY_BYTES, MAX_RATIO); }
+            try {
+                name = ZipArchiveSafety.safeEntryName(entry, MAX_ENTRY_BYTES, MAX_RATIO);
+                ZipArchiveSafety.requireUniqueEntry(names, name);
+            }
             catch (IllegalArgumentException ex) { throw new IllegalStateException(ex.getMessage()); }
-            if (result.put(name, entry) != null) throw new IllegalStateException("backup ZIP has duplicate entries");
+            result.put(name, entry);
             if (entry.getSize() > 0) total += entry.getSize();
             if (total > MAX_EXPANDED_BYTES) throw new IllegalStateException("backup ZIP exceeds expanded size limit");
         }

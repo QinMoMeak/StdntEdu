@@ -93,6 +93,7 @@ public class ImportFileParser {
     private int parseZip(Path path, ImportType type, List<ParsedRow> rows, List<ImportError> errors) throws Exception {
         int count = 0;
         long total = 0;
+        Set<String> names = new HashSet<>();
         try (ZipFile zip = ZipFile.builder().setPath(path).get()) {
             var entries = zip.getEntries();
             while (entries.hasMoreElements()) {
@@ -100,7 +101,10 @@ public class ImportFileParser {
                 if (entry.isDirectory()) continue;
                 if (++count > MAX_ENTRIES) throw invalid("ZIP exceeds entry limit");
                 String name;
-                try { name = ZipArchiveSafety.safeEntryName(entry, MAX_ENTRY_BYTES, MAX_RATIO); }
+                try {
+                    name = ZipArchiveSafety.safeEntryName(entry, MAX_ENTRY_BYTES, MAX_RATIO);
+                    ZipArchiveSafety.requireUniqueEntry(names, name);
+                }
                 catch (IllegalArgumentException ex) { throw invalid(ex.getMessage()); }
                 String suffix = suffix(name);
                 if (".zip".equals(suffix)) throw invalid("nested ZIP is not supported");

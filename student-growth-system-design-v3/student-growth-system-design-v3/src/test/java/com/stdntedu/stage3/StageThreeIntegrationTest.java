@@ -8,6 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -73,6 +76,14 @@ class StageThreeIntegrationTest {
     @Test
     void localV1BindsServerToLoopback() {
         assertThat(environment.getProperty("server.address")).isEqualTo("127.0.0.1");
+    }
+
+    @Test
+    void localV1ContractHasNoBearerAuthAndPublicApiNeedsNoAuthorization() throws Exception {
+        String contract = Files.readString(Path.of("api", "openapi.yaml"), StandardCharsets.UTF_8);
+        assertThat(contract).doesNotContain("bearerAuth", "#/components/responses/Unauthorized",
+                "#/components/responses/Forbidden");
+        mockMvc.perform(get("/api/v1/stages")).andExpect(status().isOk());
     }
 
     @Test

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Set;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 
 public final class ZipArchiveSafety {
@@ -26,6 +27,10 @@ public final class ZipArchiveSafety {
             throw new IllegalArgumentException("ZIP compression ratio exceeds limit");
         }
         return normalized.toString().replace('\\', '/');
+    }
+
+    public static void requireUniqueEntry(Set<String> names, String normalizedName) {
+        if (!names.add(normalizedName)) throw new IllegalArgumentException("ZIP has duplicate entries");
     }
 
     public static long copyBounded(InputStream input, java.io.OutputStream output, long maxBytes,

@@ -130,7 +130,7 @@ class StageTwelveEBackupRestoreIntegrationTest {
         JsonNode manifest = manifest(stored);
         assertThat(manifest.path("format").asText()).isEqualTo("STDNTEDU_BACKUP_V1");
         assertThat(manifest.path("schemaVersion").asInt()).isEqualTo(1);
-        assertThat(manifest.path("openapiVersion").asText()).isEqualTo("3.14.0");
+        assertThat(manifest.path("openapiVersion").asText()).isEqualTo("3.15.0");
         assertThat(manifest.path("timezone").asText()).isEqualTo("Asia/Shanghai");
         assertThat(manifest.path("datasets").toString()).doesNotContain("backup_record", "restore_record",
                 "import_task", "export_task", "system_config", "flyway_schema_history");

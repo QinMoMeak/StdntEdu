@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -123,6 +124,40 @@ class ImportFileParserSecurityTest {
         assertInvalid(temp(".zip", many.toByteArray()), "data.zip");
     }
 
+    @Test
+    void zipRejectsExactDuplicateEntriesWithoutOverwritingTheFirst() throws Exception {
+        assertInvalid(temp(".zip", zipEntries(
+                "students.json", "[{\"name\":\"First\",\"currentStageId\":\"1\",\"currentGradeId\":\"1\"}]",
+                "students.json", "not-json")), "data.zip");
+    }
+
+    @Test
+    void zipRejectsDuplicateNormalizedEntries() throws Exception {
+        assertInvalid(temp(".zip", zipEntries("students.json", "[]", "./students.json", "[]")), "data.zip");
+    }
+
+    @Test
+    void zipStillParsesDistinctEntries() throws Exception {
+        var parsed = parser.parse(temp(".zip", zipEntries(
+                "first.json", "[{\"name\":\"First\",\"currentStageId\":\"1\",\"currentGradeId\":\"1\"}]",
+                "second.json", "[{\"name\":\"Second\",\"currentStageId\":\"1\",\"currentGradeId\":\"1\"}]")),
+                "data.zip", ImportType.STUDENT);
+        assertThat(parsed.fileCount()).isEqualTo(2);
+        assertThat(parsed.rows()).extracting(ImportFileParser.ParsedRow::file)
+                .containsExactly("first.json", "second.json");
+    }
+
+    @Test
+    void sharedDuplicateGuardKeepsTheFirstNormalizedName() {
+        var names = new HashSet<String>();
+        com.stdntedu.common.file.ZipArchiveSafety.requireUniqueEntry(names, "students.json");
+
+        assertThatThrownBy(() -> com.stdntedu.common.file.ZipArchiveSafety
+                .requireUniqueEntry(names, "students.json"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(names).containsExactly("students.json");
+    }
+
     private void assertInvalid(Path path, String name) {
         assertThatThrownBy(() -> parser.parse(path, name, ImportType.STUDENT))
                 .isInstanceOf(BusinessException.class);
@@ -141,6 +176,18 @@ class ImportFileParserSecurityTest {
             zip.putNextEntry(new ZipEntry(name));
             zip.write(content);
             zip.closeEntry();
+        }
+        return bytes.toByteArray();
+    }
+
+    private byte[] zipEntries(String... namesAndContent) throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ZipArchiveOutputStream zip = new ZipArchiveOutputStream(bytes)) {
+            for (int i = 0; i < namesAndContent.length; i += 2) {
+                zip.putArchiveEntry(new ZipArchiveEntry(namesAndContent[i]));
+                zip.write(namesAndContent[i + 1].getBytes(StandardCharsets.UTF_8));
+                zip.closeArchiveEntry();
+            }
         }
         return bytes.toByteArray();
     }

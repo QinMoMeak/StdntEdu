@@ -5,6 +5,7 @@ import DashboardView from '@/views/DashboardView.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 import ScoreView from '@/views/ScoreView.vue'
 import StudentView from '@/views/StudentView.vue'
+import WrongQuestionView from '@/views/WrongQuestionView.vue'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -13,7 +14,6 @@ declare module 'vue-router' {
 }
 
 const placeholderRoutes: RouteRecordRaw[] = [
-  { path: 'wrong-questions', component: PlaceholderView, meta: { title: '错题' } },
   { path: 'mastery', component: PlaceholderView, meta: { title: '掌握度' } },
   { path: 'resources', component: PlaceholderView, meta: { title: '学习资源' } },
   { path: 'study-logs', component: PlaceholderView, meta: { title: '学习日志' } },
@@ -40,6 +40,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
           { path: 'dashboard', component: DashboardView, meta: { title: '学习概览' } },
           { path: 'students', component: StudentView, meta: { title: '学生档案' } },
           { path: 'scores', component: ScoreView, meta: { title: '成绩与考试' } },
+          { path: 'wrong-questions', component: WrongQuestionView, meta: { title: '错题与复习' } },
           ...placeholderRoutes,
         ],
       },
